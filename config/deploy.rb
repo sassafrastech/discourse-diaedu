@@ -98,13 +98,20 @@ if Rubber::Util.has_asset_pipeline?
   callbacks[:after].delete_if {|c| c.source == "deploy:assets:precompile"}
   callbacks[:before].delete_if {|c| c.source == "deploy:assets:symlink"}
   before "deploy:assets:precompile", "deploy:assets:symlink"
-  after "rubber:config", "deploy:assets:precompile"
+  # DONT THINK THIS IS NECESSARY, IT JUST RUNS PRECOMPILE TWICE
+  #after "rubber:config", "deploy:assets:precompile"
 end
 
 # fix postgres hstore issue (thanks pgb on stackoverflow)
 namespace :rubber do
 
   namespace :discourse do
+
+    after "deploy:migrate", "rubber:discourse:seed_diaedu" 
+
+    task :seed_diaedu do
+      run "cd #{deploy_to}/current && /usr/bin/env rake diaedu:seed RAILS_ENV=production"
+    end
 
     before "deploy:migrate", "rubber:discourse:add_pg_superuser_and_enable_hstore"
     after "deploy:migrate", "rubber:discourse:remove_pg_superuser"
@@ -127,10 +134,10 @@ namespace :rubber do
       ENDSCRIPT
     end
 
-    after "deploy:setup", "rubber:discourse:import_db_seed" 
+    after "deploy:setup", "rubber:discourse:import_db_seed"
 
     task :import_db_seed, :roles => [:postgresql_master, :postgresql_slave] do
-      "psql -U discourse discourse_production < #{release_path}/pg_dumps/production-image.sql"
+      run "psql -U discourse discourse_production < #{release_path}/pg_dumps/production-image.sql"
     end
 
   end

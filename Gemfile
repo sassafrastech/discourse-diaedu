@@ -223,5 +223,5 @@ gem 'diaedu', path: 'vendor/gems/diaedu'
 
 # these should be moved to diaedu eventually
 gem 'foreigner'
-gem 'random_data', :path => '/Users/tomsmyth/Documents/sassafras/random_data'
+gem 'random_data', :git => 'git://github.com/hooverlunch/random_data'
 gem "factory_girl_rails", "~> 4.0"

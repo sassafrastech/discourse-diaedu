@@ -42,4 +42,4 @@ roles:
   postgresql_slave:
     db_server_id: 2
   db:
-    packages: ["postgresql-#{postgresql_ver}"]
+    packages: ["postgresql-#{postgresql_ver}", "postgresql-contrib-#{postgresql_ver}"]
