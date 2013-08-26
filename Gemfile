@@ -217,3 +217,11 @@ gem 'open4'
 gem 'gelf'
 gem 'graylog2_exceptions', :git => 'git://github.com/wr0ngway/graylog2_exceptions.git'
 gem 'graylog2-resque'
+
+# our fancy plugin!
+gem 'diaedu', path: 'vendor/gems/diaedu'
+
+# these should be moved to diaedu eventually
+gem 'foreigner'
+gem 'random_data', :path => '/Users/tomsmyth/Documents/sassafras/random_data'
+gem "factory_girl_rails", "~> 4.0"
