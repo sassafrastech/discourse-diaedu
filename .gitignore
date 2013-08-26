@@ -90,3 +90,6 @@ config/version.rb
 .ruby-version
 .ruby-gemset
 .rbenv
+
+# ignore my test engine
+vendor/gems/test_engine
