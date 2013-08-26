@@ -1,0 +1,62 @@
+---
+- !ruby/object:Rubber::Configuration::InstanceItem
+  name: production
+  domain: foo.com
+  roles:
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: web
+    options: {}
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: haproxy
+    options: {}
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: app
+    options: {}
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: passenger
+    options: {}
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: apache
+    options: {}
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: db
+    options:
+      primary: true
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: postgresql
+    options: {}
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: postgresql_master
+    options: {}
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: collectd
+    options: {}
+  - !ruby/object:Rubber::Configuration::RoleItem
+    name: monit
+    options: {}
+  instance_id: i-1bd26a7c
+  image_type: m1.small
+  image_id: ami-b6089bdf
+  security_groups:
+  - discourse_production_default
+  - discourse_production_web
+  - discourse_production_production
+  - discourse_production_haproxy
+  - discourse_production_app
+  - discourse_production_passenger
+  - discourse_production_apache
+  - discourse_production_db
+  - discourse_production_postgresql
+  - discourse_production_postgresql_master
+  - discourse_production_collectd
+  - discourse_production_monit
+  external_host: ec2-54-211-151-131.compute-1.amazonaws.com
+  external_ip: 54.211.151.131
+  internal_host: domU-12-31-39-0A-36-EA.compute-1.internal
+  internal_ip: 10.211.53.20
+  zone: us-east-1a
+  provider: aws
+  platform: linux
+  root_device_type: instance-store
+- volumes: {}
+  static_ips: {}
