@@ -13,19 +13,21 @@ Discourse.EditTopicAutoCloseController = Discourse.ObjectController.extend(Disco
     if( this.get('details.auto_close_at') ) {
       var closeTime = new Date( this.get('details.auto_close_at') );
       if (closeTime > new Date()) {
-        this.set('auto_close_days', closeTime.daysSince());
+        this.set('auto_close_days', Math.round(moment(closeTime).diff(new Date(), 'days', true)));
       }
     } else {
       this.set('details.auto_close_days', '');
     }
   }.observes('details.auto_close_at'),
 
-  saveAutoClose: function() {
-    this.setAutoClose( parseFloat(this.get('auto_close_days')) );
-  },
+  actions: {
+    saveAutoClose: function() {
+      this.setAutoClose( parseFloat(this.get('auto_close_days')) );
+    },
 
-  removeAutoClose: function() {
-    this.setAutoClose(null);
+    removeAutoClose: function() {
+      this.setAutoClose(null);
+    }
   },
 
   setAutoClose: function(days) {

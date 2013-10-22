@@ -10,7 +10,7 @@ Discourse.Route.buildRoutes(function() {
   // Topic routes
   this.resource('topic', { path: '/t/:slug/:id' }, function() {
     this.route('fromParams', { path: '/' });
-    this.route('fromParams', { path: '/:nearPost' });
+    this.route('fromParamsNear', { path: '/:nearPost' });
   });
 
   // Generate static page routes
@@ -50,13 +50,15 @@ Discourse.Route.buildRoutes(function() {
     });
 
     this.resource('userPrivateMessages', { path: '/private-messages' }, function() {
-      this.route('sent', {path: '/messages-sent'});
+      this.route('mine', {path: '/mine'});
+      this.route('unread', {path: '/unread'});
     });
 
     this.resource('preferences', { path: '/preferences' }, function() {
       this.route('username', { path: '/username' });
       this.route('email', { path: '/email' });
       this.route('about', { path: '/about-me' });
+      this.route('avatar', { path: '/avatar' });
     });
 
     this.route('invited', { path: 'invited' });

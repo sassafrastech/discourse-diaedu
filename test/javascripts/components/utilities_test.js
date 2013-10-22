@@ -24,7 +24,6 @@ test("uploading one file", function() {
 
 test("new user cannot upload images", function() {
   Discourse.SiteSettings.newuser_max_images = 0;
-  this.stub(Discourse.User, 'current').withArgs("trust_level").returns(0);
   this.stub(bootbox, "alert");
 
   ok(!validUpload([{name: "image.png"}]));
@@ -33,7 +32,6 @@ test("new user cannot upload images", function() {
 
 test("new user cannot upload attachments", function() {
   Discourse.SiteSettings.newuser_max_attachments = 0;
-  this.stub(Discourse.User, 'current').withArgs("trust_level").returns(0);
   this.stub(bootbox, "alert");
 
   ok(!validUpload([{name: "roman.txt"}]));
@@ -52,6 +50,7 @@ test("ensures an authorized upload", function() {
 test("prevents files that are too big from being uploaded", function() {
   var image = { name: "image.png", size: 10 * 1024 };
   Discourse.SiteSettings.max_image_size_kb = 5;
+  Discourse.User.currentProp("trust_level", 1);
   this.stub(bootbox, "alert");
 
   ok(!validUpload([image]));
@@ -70,6 +69,7 @@ var dummyBlob = function() {
 };
 
 test("allows valid uploads to go through", function() {
+  Discourse.User.currentProp("trust_level", 1);
   Discourse.SiteSettings.max_image_size_kb = 15;
   this.stub(bootbox, "alert");
 
@@ -110,33 +110,38 @@ test("isAnImage", function() {
 });
 
 test("avatarUrl", function() {
-  blank(Discourse.Utilities.avatarUrl('', 'tiny'), "no avatar url returns blank");
-  blank(Discourse.Utilities.avatarUrl('this is not a username', 'tiny'), "invalid username returns blank");
-
-  equal(Discourse.Utilities.avatarUrl('eviltrout', 'tiny'), "/users/eviltrout/avatar/20?__ws=", "simple avatar url");
-  equal(Discourse.Utilities.avatarUrl('eviltrout', 'large'), "/users/eviltrout/avatar/45?__ws=", "different size");
-  equal(Discourse.Utilities.avatarUrl('EvilTrout', 'tiny'), "/users/eviltrout/avatar/20?__ws=", "lowercases username");
-  equal(Discourse.Utilities.avatarUrl('eviltrout', 'tiny', 'test{size}'), "test20", "replaces the size in a template");
-});
-
-test("avatarUrl with a baseUrl", function() {
-  Discourse.BaseUrl = "http://try.discourse.org";
-  equal(Discourse.Utilities.avatarUrl('eviltrout', 'tiny'), "/users/eviltrout/avatar/20?__ws=http%3A%2F%2Ftry.discourse.org", "simple avatar url");
+  blank(Discourse.Utilities.avatarUrl('', 'tiny'), "no template returns blank");
+  equal(Discourse.Utilities.avatarUrl('/fake/template/{size}.png', 'tiny'), "/fake/template/20.png", "simple avatar url");
+  equal(Discourse.Utilities.avatarUrl('/fake/template/{size}.png', 'large'), "/fake/template/45.png", "different size");
 });
 
 test("avatarImg", function() {
-  equal(Discourse.Utilities.avatarImg({username: 'eviltrout', size: 'tiny'}),
-        "<img width='20' height='20' src='/users/eviltrout/avatar/20?__ws=' class='avatar'>",
+  var avatarTemplate = "/path/to/avatar/{size}.png";
+  equal(Discourse.Utilities.avatarImg({avatarTemplate: avatarTemplate, size: 'tiny'}),
+        "<img width='20' height='20' src='/path/to/avatar/20.png' class='avatar'>",
         "it returns the avatar html");
 
-  equal(Discourse.Utilities.avatarImg({username: 'eviltrout', size: 'tiny', title: 'evilest trout'}),
-        "<img width='20' height='20' src='/users/eviltrout/avatar/20?__ws=' class='avatar' title='evilest trout'>",
+  equal(Discourse.Utilities.avatarImg({avatarTemplate: avatarTemplate, size: 'tiny', title: 'evilest trout'}),
+        "<img width='20' height='20' src='/path/to/avatar/20.png' class='avatar' title='evilest trout'>",
         "it adds a title if supplied");
 
-  equal(Discourse.Utilities.avatarImg({username: 'eviltrout', size: 'tiny', extraClasses: 'evil fish'}),
-        "<img width='20' height='20' src='/users/eviltrout/avatar/20?__ws=' class='avatar evil fish'>",
+  equal(Discourse.Utilities.avatarImg({avatarTemplate: avatarTemplate, size: 'tiny', extraClasses: 'evil fish'}),
+        "<img width='20' height='20' src='/path/to/avatar/20.png' class='avatar evil fish'>",
         "it adds extra classes if supplied");
 
-  blank(Discourse.Utilities.avatarImg({username: 'weird*username', size: 'tiny'}),
-        "it doesn't render avatars for invalid usernames");
+  blank(Discourse.Utilities.avatarImg({avatarTemplate: "", size: 'tiny'}),
+        "it doesn't render avatars for invalid avatar template");
+});
+
+module("Discourse.Utilities.cropAvatar with animated avatars", {
+  setup: function() { Discourse.SiteSettings.allow_animated_avatars = true; }
+});
+
+asyncTestDiscourse("cropAvatar", function() {
+  expect(1);
+
+  Discourse.Utilities.cropAvatar("/path/to/avatar.gif", "image/gif").then(function(avatarTemplate) {
+    equal(avatarTemplate, "/path/to/avatar.gif", "returns the url to the gif when animated gif are enabled");
+    start();
+  });
 });

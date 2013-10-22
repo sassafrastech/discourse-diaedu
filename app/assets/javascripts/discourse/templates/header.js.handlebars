@@ -34,7 +34,7 @@
       {{#unless showExtraInfo}}
         <div class='current-username'>
           {{#if currentUser}}
-          <span class='username'><a {{bindAttr href="currentUser.path"}}>{{currentUser.name}}</a></span>
+            <span class='username'><a {{bindAttr href="currentUser.path"}}>{{currentUser.name}}</a></span>
           {{else}}
             <button {{action showLogin}} class='btn btn-primary btn-small'>{{i18n log_in}}</button>
           {{/if}}
@@ -89,7 +89,7 @@
         </li>
         <li class='current-user'>
           {{#if currentUser}}
-            {{#linkTo 'userActivity.index' currentUser titleKey="current_user" class="icon"}}{{avatar currentUser imageSize="medium" }}{{/linkTo}}
+            {{#link-to 'userActivity.index' currentUser titleKey="current_user" class="icon"}}{{boundAvatar currentUser imageSize="medium" }}{{/link-to}}
           {{else}}
             <div class="icon not-logged-in-avatar" {{action showLogin}}><i class='icon-user'></i></div>
           {{/if}}
@@ -127,12 +127,23 @@
           {{#titledLinkTo "list.latest" titleKey="filters.latest.help"}}{{i18n filters.latest.title}}{{/titledLinkTo}}
         </li>
         <li>{{faqLink}}</li>
+        {{#if showMobileToggle}}
+          <li>
+            <a href="#" {{action toggleMobileView}}>
+              {{#if mobileView}}
+                {{i18n desktop_view}}
+              {{else}}
+                {{i18n mobile_view}}
+              {{/if}}
+            </a>
+          </li>
+        {{/if}}
       </ul>
 
       {{#if categories}}
         <ul class="category-links">
           <li class='heading' title="{{i18n filters.categories.help}}">
-            {{#linkTo "list.categories"}}{{i18n filters.categories.title}}{{/linkTo}}
+            {{#link-to "list.categories"}}{{i18n filters.categories.title}}{{/link-to}}
           </li>
 
           {{#each categories}}

@@ -19,7 +19,7 @@ class OptimizedImage < ActiveRecord::Base
     temp_file = Tempfile.new(["discourse-thumbnail", File.extname(original_path)])
     temp_path = temp_file.path
 
-    if ImageSorcery.new(original_path).convert(temp_path, resize: "#{width}x#{height}")
+    if ImageSorcery.new("#{original_path}[0]").convert(temp_path, resize: "#{width}x#{height}!")
       thumbnail = OptimizedImage.create!(
         upload_id: upload.id,
         sha1: Digest::SHA1.file(temp_path).hexdigest,
@@ -43,7 +43,7 @@ class OptimizedImage < ActiveRecord::Base
 
   def destroy
     OptimizedImage.transaction do
-      Discourse.store.remove_file(url)
+      Discourse.store.remove_optimized_image(self)
       super
     end
   end
@@ -60,6 +60,7 @@ end
 #  width     :integer          not null
 #  height    :integer          not null
 #  upload_id :integer          not null
+#  url       :string(255)      not null
 #
 # Indexes
 #

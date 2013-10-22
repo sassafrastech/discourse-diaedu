@@ -268,7 +268,6 @@ pt_BR:
         title: "Último endereço IP"
       avatar:
         title: "Avatar"
-        instructions: "Nós utilizamos <a href='https://gravatar.com' target='_blank'>Gravatar</a> para os avatares baseados no seu email"
       title:
         title: "Título"
       filters:
@@ -433,12 +432,8 @@ pt_BR:
       title: "Enviar arquivo"
       from_my_computer: "Do Meu Dispositivo"
       from_the_web: "Da Internet"
-      add_title: "Adicionar Arquivo"
-      remote_title: "arquivo remoto"
       remote_tip: "digite o endereço de um arquivo na forma http://exemplo.com/imagem.jpg"
-      local_title: "arquivo local"
       local_tip: "clique para selecionar um arquivo do seu dispositivo"
-      upload_title: "Enviar"
       uploading: "Enviando"
     search:
       title: "procurar por tópicos, posts, usuários, ou categorias"
@@ -900,8 +895,8 @@ pt_BR:
         critical_available: "Uma atualização crítica está disponível."
         updates_available: "Atualizações estão disponíveis."
         please_upgrade: "Por favor atualize!"
-        no_check_performed: "Não foi feita verificação por atualizações. Certifique-se de que o clockwork e o sidekiq estejam sendo executados."
-        stale_data: "Não foi feita verificação por atualizações ultimamente. Certifique-se de que o clockwork e o sidekiq estejam sendo executados."
+        no_check_performed: "Não foi feita verificação por atualizações. Certifique-se de sidekiq esta em execucao."
+        stale_data: "Não foi feita verificação por atualizações ultimamente. Certifique-se de sidekiq esta em execucao."
         installed_version: "Instalado"
         latest_version: "Última versão"
         problems_found: "Alguns problemas foram encontrados na sua instalação do Discourse:"

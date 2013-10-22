@@ -39,11 +39,13 @@ class UserNotifications < ActionMailer::Base
     @last_seen_at = I18n.l(@user.last_seen_at || @user.created_at, format: :short)
 
     # A list of topics to show the user
-    @new_topics = Topic.for_digest(user, min_date)
-    @markdown_linker = MarkdownLinker.new(Discourse.base_url)
+    @featured_topics = Topic.for_digest(user, min_date).to_a
 
     # Don't send email unless there is content in it
-    if @new_topics.present?
+    if @featured_topics.present?
+      @featured_topics, @new_topics = @featured_topics[0..4], @featured_topics[5..-1]
+      @markdown_linker = MarkdownLinker.new(Discourse.base_url)
+
       build_email user.email,
                   from_alias: I18n.t('user_notifications.digest.from', site_name: SiteSetting.title),
                   subject: I18n.t('user_notifications.digest.subject_template',
@@ -100,7 +102,6 @@ class UserNotifications < ActionMailer::Base
   end
 
   def notification_email(user, opts)
-
     return unless @notification = opts[:notification]
     return unless @post = opts[:post]
 
@@ -110,6 +111,7 @@ class UserNotifications < ActionMailer::Base
     context = ""
     context_posts = Post.where(topic_id: @post.topic_id)
                         .where("post_number < ?", @post.post_number)
+                        .where(user_deleted: false)
                         .order('created_at desc')
                         .limit(SiteSetting.email_posts_context)
 
@@ -148,7 +150,7 @@ class UserNotifications < ActionMailer::Base
 
     # If we have a display name, change the from address
     if username.present?
-      email_opts[:from_alias] = I18n.t(:via, username: username, site_name: SiteSetting.title)
+      email_opts[:from_alias] = username
     end
 
     build_email(user.email, email_opts)

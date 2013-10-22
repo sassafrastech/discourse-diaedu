@@ -1,4 +1,6 @@
 require 'cache'
+require_dependency 'plugin/instance'
+require_dependency 'auth/default_current_user_provider'
 
 module Discourse
 
@@ -24,7 +26,7 @@ module Discourse
   class CSRF < Exception; end
 
   def self.activate_plugins!
-    @plugins = Plugin.find_all("#{Rails.root}/plugins")
+    @plugins = Plugin::Instance.find_all("#{Rails.root}/plugins")
     @plugins.each do |plugin|
       plugin.activate!
     end
@@ -32,6 +34,16 @@ module Discourse
 
   def self.plugins
     @plugins
+  end
+
+  def self.authenticators
+    # TODO: perhaps we don't need auth providers and authenticators maybe one object is enough
+
+    # NOTE: this bypasses the site settings and gives a list of everything, we need to register every middleware
+    #  for the cases of multisite
+    # In future we may change it so we don't include them all for cases where we are not a multisite, but we would
+    #  require a restart after site settings change
+    Users::OmniauthCallbacksController::BUILTIN_AUTH + auth_providers.map(&:authenticator)
   end
 
   def self.auth_providers
@@ -117,11 +129,14 @@ module Discourse
     end
   end
 
-  # Either returns the system_username user or the first admin.
+  # Either returns the site_contact_username user or the first admin.
+  def self.site_contact_user
+    user = User.where(username_lower: SiteSetting.site_contact_username).first if SiteSetting.site_contact_username.present?
+    user ||= User.admins.real.order(:id).first
+  end
+
   def self.system_user
-    user = User.where(username_lower: SiteSetting.system_username).first if SiteSetting.system_username.present?
-    user = User.admins.order(:id).first if user.blank?
-    user
+    User.where(id: -1).first
   end
 
   def self.store
@@ -132,6 +147,14 @@ module Discourse
       @local_store_loaded ||= require 'file_store/local_store'
       LocalStore.new
     end
+  end
+
+  def self.current_user_provider
+    @current_user_provider || Auth::DefaultCurrentUserProvider
+  end
+
+  def self.current_user_provider=(val)
+    @current_user_provider = val
   end
 
 private

@@ -91,6 +91,8 @@ config/version.rb
 .ruby-gemset
 .rbenv
 
+bundler_stubs/*
+
 # ignore my test engine
 vendor/gems/test_engine
 

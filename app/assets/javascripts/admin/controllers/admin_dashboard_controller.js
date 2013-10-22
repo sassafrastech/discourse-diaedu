@@ -12,11 +12,11 @@ Discourse.AdminDashboardController = Ember.Controller.extend({
   problemsCheckMinutes: 1,
 
   foundProblems: function() {
-    return(Discourse.User.current('admin') && this.get('problems') && this.get('problems').length > 0);
+    return(Discourse.User.currentProp('admin') && this.get('problems') && this.get('problems').length > 0);
   }.property('problems'),
 
   thereWereProblems: function() {
-    if(!Discourse.User.current('admin')) { return false }
+    if(!Discourse.User.currentProp('admin')) { return false }
     if( this.get('foundProblems') ) {
       this.set('hadProblems', true);
       return true;
@@ -46,5 +46,12 @@ Discourse.AdminDashboardController = Ember.Controller.extend({
 
   updatedTimestamp: function() {
     return moment(this.get('updated_at')).format('LLL');
-  }.property('updated_at')
+  }.property('updated_at'),
+
+  actions: {
+    refreshProblems: function() {
+      this.loadProblems();
+    }
+  }
+
 });

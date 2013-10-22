@@ -32,13 +32,13 @@ if rails4?
   end
 end
 
+gem 'seed-fu' , github: 'SamSaffron/seed-fu'
+
 if rails4?
   gem 'rails', :git => 'git://github.com/rails/rails.git', :branch => '4-0-stable'
   gem 'redis-rails', :git => 'git://github.com/SamSaffron/redis-store.git'
   gem 'rails-observers'
   gem 'actionpack-action_caching'
-  gem 'seed-fu' , github: 'mbleigh/seed-fu'
-  gem 'spork-rails', :github => 'sporkrb/spork-rails'
 else
   # we had pain with the 3.2.13 upgrade so monkey patch the security fix
   # next time around we hope to upgrade
@@ -48,18 +48,12 @@ else
   # REVIEW EVERY RELEASE
   gem 'sprockets', git: 'https://github.com/SamSaffron/sprockets.git', branch: 'rails-compat'
   gem 'redis-rails'
-  gem 'seed-fu'
   gem 'activerecord-postgres-hstore'
   gem 'active_attr'
-
-  # not compatible, but we don't really use guard much anymore anyway
-  # instead we use bundle exec rake autospec
-  gem 'guard-spork', require: false
 end
 
-gem 'redis'
 gem 'hiredis'
-gem 'em-redis'
+gem 'redis', :require => ["redis", "redis/connection/hiredis"]
 
 gem 'active_model_serializers'
 
@@ -78,7 +72,7 @@ gem 'simple_handlebars_rails', path: 'vendor/gems/simple_handlebars_rails'
 
 gem 'redcarpet', require: false
 gem 'airbrake', '3.1.2', require: false # errbit is broken with 3.1.3 for now
-gem 'clockwork', require: false
+gem 'sidetiq', '>= 0.3.6'
 gem 'eventmachine'
 gem 'fast_xs'
 gem 'fast_xor', git: 'https://github.com/CodeMonkeySteve/fast_xor.git'
@@ -102,6 +96,7 @@ gem 'openid-redis-store'
 gem 'omniauth-facebook'
 gem 'omniauth-twitter'
 gem 'omniauth-github'
+gem 'omniauth-oauth2', require: false
 gem 'omniauth-browserid', git: 'https://github.com/callahad/omniauth-browserid.git', branch: 'observer_api'
 gem 'omniauth-cas'
 gem 'oj'
@@ -158,18 +153,17 @@ group :test, :development do
     gem 'fabrication', require: false
   end
   gem 'qunit-rails'
-  gem 'guard-rspec', require: false
   gem 'mocha', require: false
   gem 'rb-fsevent', require: RUBY_PLATFORM =~ /darwin/i ? 'rb-fsevent' : false
   gem 'rb-inotify', '~> 0.9', require: RUBY_PLATFORM =~ /linux/i ? 'rb-inotify' : false
   gem 'rspec-rails', require: false
   gem 'shoulda', require: false
   gem 'simplecov', require: false
-  gem 'terminal-notifier-guard', require: false
   gem 'timecop'
   gem 'rspec-given'
   gem 'pry-rails'
   gem 'pry-nav'
+  gem 'spork-rails', :github => 'sporkrb/spork-rails'
 end
 
 group :development do
@@ -193,15 +187,14 @@ gem 'lru_redux'
 # IMPORTANT: mini profiler monkey patches, so it better be required last
 #  If you want to amend mini profiler to do the monkey patches in the railstie
 #  we are open to it. by deferring require to the initializer we can configure disourse installs without it
-gem 'rack-mini-profiler', '0.1.28', require: false  # require: false #, git: 'git://github.com/SamSaffron/MiniProfiler'
+
+gem 'flamegraph', git: 'https://github.com/SamSaffron/flamegraph.git', require: false
+gem 'rack-mini-profiler',  git: 'https://github.com/MiniProfiler/rack-mini-profiler.git', require: false
 
 # used for caching, optional
-# redis-rack-cache is missing a sane expiry policy, it hogs redis
-# https://github.com/jodosha/redis-store/pull/183
-gem 'redis-rack-cache', git: 'https://github.com/SamSaffron/redis-rack-cache.git', require: false
-gem 'rack-cache', require: false
 gem 'rack-cors', require: false
 gem 'unicorn', require: false
+gem 'puma', require: false
 
 # perftools only works on 1.9 atm
 group :profile do
