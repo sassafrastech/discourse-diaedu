@@ -211,13 +211,6 @@ group :profile do
   # gem 'rack-perftools_profiler', require: 'rack/perftools_profiler', platform: :mri_19
 end
 
-# rubber and friends
-gem 'rubber'
-gem 'open4'
-gem 'gelf'
-gem 'graylog2_exceptions', :git => 'git://github.com/wr0ngway/graylog2_exceptions.git'
-gem 'graylog2-resque'
-
 # our fancy plugin!
 gem 'diaedu', path: 'vendor/gems/diaedu'
 
