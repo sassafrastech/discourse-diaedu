@@ -93,3 +93,6 @@ config/version.rb
 
 # ignore my test engine
 vendor/gems/test_engine
+
+# ignore migrations copied from diaedu plugin
+db/migrate/*.diaedu.rb
