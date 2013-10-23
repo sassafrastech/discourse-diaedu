@@ -13,6 +13,10 @@ en:
       cancel: "Cancel"
       description: "Description"
       how_got_here: "How You Got Here"
+      likes:
+        zero: "Likes"
+        one: "Like"
+        other: "Likes"
       ok: "OK"
       name: "Name"
       none_found: "No matching objects found."
@@ -20,12 +24,16 @@ en:
       server_error: "Error communicating with server"
       title: "Knowledge Base"
       try_again: "Try again"
+      views:
+        zero: "Views"
+        one: "View"
+        other: "Views"
 
       comments:
-        comment_count: 
-          zero: "%{count} comments"
-          one: "%{count} comment"
-          other: "%{count} comments"
+        comments:
+          zero: "Comments"
+          one: "Comment"
+          other: "Comments"
         none_yet: "No comments yet. Be the first!"
         title: "Comments"
         view_full: "View full discussion"
@@ -48,7 +56,7 @@ en:
         evaluation: "Evaluation"
         event: "Event"
         new_title: "New Glycemic Problem"
-        related_heading: "Associated Glycemic Problems"
+        related_heading: "Associated Glycemic Probs."
         title: 
           zero: "Glycemic Problems" 
           one: "Glycemic Problem"
@@ -64,6 +72,7 @@ en:
           zero: "Goals" 
           one: "Goal"
           other: "Goals"
+        topic_intro: "This topic is a discussion of the goal '%{name}', which is described as follows:"
 
       objs:
         sent_for_approval: "Thanks! Your submission has been sent to the site moderators for approval."
@@ -83,6 +92,7 @@ en:
           zero: "Triggers" 
           one: "Trigger"
           other: "Triggers"
+        topic_intro: "This topic is a discussion of the trigger '%{name}', which is described as follows:"
 
     number:
       human:
