@@ -96,7 +96,7 @@ GIT
       activesupport (>= 3.0.0)
 
 PATH
-  remote: vendor/gems/diaedu
+  remote: plugins/diaedu
   specs:
     diaedu (0.0.1)
       jquery-rails
