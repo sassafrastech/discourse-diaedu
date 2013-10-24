@@ -32,7 +32,7 @@ if rails4?
   end
 end
 
-gem 'seed-fu' , github: 'SamSaffron/seed-fu'
+gem 'seed-fu' , :git => 'https://github.com/SamSaffron/seed-fu.git'
 
 if rails4?
   gem 'rails', :git => 'https://github.com/rails/rails.git', :branch => '4-0-stable'
@@ -148,7 +148,7 @@ group :test, :development do
   gem 'listen', require: false
   gem 'certified', require: false
   if rails4?
-    gem 'fabrication', github: 'paulelliott/fabrication', require: false
+    gem 'fabrication', git: 'https://github.com/paulelliott/fabrication.git', require: false
   else
     gem 'fabrication', require: false
   end
@@ -163,7 +163,7 @@ group :test, :development do
   gem 'rspec-given'
   gem 'pry-rails'
   gem 'pry-nav'
-  gem 'spork-rails', :github => 'sporkrb/spork-rails'
+  gem 'spork-rails', :git => 'https://github.com/sporkrb/spork-rails.git'
 end
 
 group :development do
