@@ -214,7 +214,7 @@ group :development do
 end
 
 group :development, :test do
-  gem 'random_data', :git => 'git://github.com/hooverlunch/random_data'
+  gem 'random_data', :git => 'https://github.com/hooverlunch/random_data'
   gem "factory_girl_rails", "~> 4.0"
 end
 
