@@ -208,6 +208,13 @@ end
 gem 'diaedu', path: 'vendor/gems/diaedu'
 
 # these should be moved to diaedu eventually
-gem 'foreigner'
-gem 'random_data', :git => 'git://github.com/hooverlunch/random_data'
-gem "factory_girl_rails", "~> 4.0"
+
+group :development do
+  gem 'foreigner'
+end
+
+group :development, :test do
+  gem 'random_data', :git => 'git://github.com/hooverlunch/random_data'
+  gem "factory_girl_rails", "~> 4.0"
+end
+
