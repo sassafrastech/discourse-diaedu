@@ -70,8 +70,8 @@ module PrettyText
               "vendor/assets/javascripts/better_markdown.js",
               "app/assets/javascripts/defer/html-sanitizer-bundle.js",
               "app/assets/javascripts/discourse/dialects/dialect.js",
-              "app/assets/javascripts/discourse/components/utilities.js",
-              "app/assets/javascripts/discourse/components/markdown.js")
+              "app/assets/javascripts/discourse/lib/utilities.js",
+              "app/assets/javascripts/discourse/lib/markdown.js")
 
     Dir["#{Rails.root}/app/assets/javascripts/discourse/dialects/**.js"].each do |dialect|
       unless dialect =~ /\/dialect\.js$/
@@ -163,7 +163,7 @@ module PrettyText
   def self.apply_cdn(html, url)
     return html unless url
 
-    image = /\.(jpg|jpeg|gif|png|tiff|tif|bmp)$/
+    image = /\.(png|jpg|jpeg|gif|bmp|tif|tiff)$/i
     relative = /^\/[^\/]/
 
     doc = Nokogiri::HTML.fragment(html)

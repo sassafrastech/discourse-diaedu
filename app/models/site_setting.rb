@@ -18,7 +18,6 @@ class SiteSetting < ActiveRecord::Base
   client_setting(:tos_url, '')
   client_setting(:faq_url, '')
   client_setting(:privacy_policy_url, '')
-  setting(:api_key, '')
   client_setting(:traditional_markdown_linebreaks, false)
   client_setting(:top_menu, 'latest|new|unread|favorited|categories')
   client_setting(:post_menu, 'like|edit|flag|delete|share|bookmark|reply')
@@ -51,6 +50,7 @@ class SiteSetting < ActiveRecord::Base
   client_setting(:min_body_similar_length, 15)
   # cf. https://github.com/discourse/discourse/pull/462#issuecomment-14991562
   client_setting(:category_colors, 'BF1E2E|F1592A|F7941D|9EB83B|3AB54A|12A89D|25AAE2|0E76BD|652D90|92278F|ED207B|8C6238|231F20|808281|B3B5B4|283890')
+  client_setting(:enable_wide_category_list, false)
 
   # auto-replace rules for title
   setting(:title_prettify, true)
@@ -102,10 +102,6 @@ class SiteSetting < ActiveRecord::Base
   setting(:site_contact_username, '')
   setting(:max_mentions_per_post, 10)
   setting(:newuser_max_mentions_per_post, 2)
-
-  client_setting(:uncategorized_name, 'uncategorized')
-  client_setting(:uncategorized_color, 'AB9364');
-  client_setting(:uncategorized_text_color, 'FFFFFF');
 
   setting(:unique_posts_mins, Rails.env.test? ? 0 : 5)
 
@@ -267,19 +263,12 @@ class SiteSetting < ActiveRecord::Base
   setting(:max_daily_gravatar_crawls, 500)
 
   setting(:sequential_replies_threshold, 2)
-
   client_setting(:enable_mobile_theme, true)
 
   setting(:dominating_topic_minimum_percent, 20)
 
-  def self.generate_api_key!
-    self.api_key = SecureRandom.hex(32)
-  end
-
-  def self.api_key_valid?(tested)
-    t = tested.strip
-    t.length == 64 && t == self.api_key
-  end
+  # hidden setting only used by system
+  setting(:uncategorized_category_id, -1, hidden: true)
 
   def self.call_discourse_hub?
     self.enforce_global_nicknames? && self.discourse_org_access_key.present?

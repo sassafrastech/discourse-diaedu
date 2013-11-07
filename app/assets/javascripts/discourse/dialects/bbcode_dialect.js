@@ -90,7 +90,7 @@ replaceBBCodeParamsRaw("email", function(param, contents) {
 });
 
 replaceBBCodeParams("size", function(param, contents) {
-  return ['span', {'class': "bbcode-size-" + param}].concat(contents);
+  return ['span', {'class': "bbcode-size-" + (parseInt(param, 10) || 1)}].concat(contents);
 });
 
 // Handles `[code] ... [/code]` blocks
@@ -99,7 +99,7 @@ Discourse.Dialect.replaceBlock({
   stop: '[/code]',
 
   emitter: function(blockContents) {
-    return ['p', ['pre'].concat(blockContents)];
+    return ['p', ['pre'].concat(blockContents.join("\n"))];
   }
 });
 

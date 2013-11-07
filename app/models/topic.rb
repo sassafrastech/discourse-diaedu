@@ -56,11 +56,13 @@ class Topic < ActiveRecord::Base
                                         :case_sensitive => false,
                                         :collection => Proc.new{ Topic.listable_topics } }
 
-  # The allow_uncategorized_topics site setting can be changed at any time, so there may be
-  # existing topics with nil category. We'll allow that, but when someone tries to make a new
-  # topic or change a topic's category, perform validation.
-  attr_accessor :do_category_validation
-  validates :category_id, :presence => { :if => Proc.new { @do_category_validation && !SiteSetting.allow_uncategorized_topics } }
+  validates :category_id, :presence => true ,:exclusion => {:in => [SiteSetting.uncategorized_category_id]},
+                                     :if => Proc.new { |t|
+                                           (t.new_record? || t.category_id_changed?) &&
+                                           !SiteSetting.allow_uncategorized_topics &&
+                                           (t.archetype.nil? || t.archetype == Archetype.default)
+                                       }
+
 
   before_validation do
     self.sanitize_title
@@ -98,13 +100,14 @@ class Topic < ActiveRecord::Base
   attr_accessor :user_data
   attr_accessor :posters  # TODO: can replace with posters_summary once we remove old list code
   attr_accessor :topic_list
+  attr_accessor :include_last_poster
 
   # The regular order
   scope :topic_list_order, lambda { order('topics.bumped_at desc') }
 
   # Return private message topics
   scope :private_messages, lambda {
-    where(archetype: Archetype::private_message)
+    where(archetype: Archetype.private_message)
   }
 
   scope :listable_topics, lambda { where('topics.archetype <> ?', [Archetype.private_message]) }
@@ -141,13 +144,16 @@ class Topic < ActiveRecord::Base
   before_create do
     self.bumped_at ||= Time.now
     self.last_post_user_id ||= user_id
-    self.do_category_validation = true
     if !@ignore_category_auto_close and self.category and self.category.auto_close_days and self.auto_close_at.nil?
       set_auto_close(self.category.auto_close_days)
     end
   end
 
+  attr_accessor :skip_callbacks
+
   after_create do
+    return if skip_callbacks
+
     changed_to_category(category)
     if archetype == Archetype.private_message
       DraftSequence.next!(user, Draft::NEW_PRIVATE_MESSAGE)
@@ -157,17 +163,28 @@ class Topic < ActiveRecord::Base
   end
 
   before_save do
+    return if skip_callbacks
+
     if (auto_close_at_changed? and !auto_close_at_was.nil?) or (auto_close_user_id_changed? and auto_close_at)
       self.auto_close_started_at ||= Time.zone.now if auto_close_at
       Jobs.cancel_scheduled_job(:close_topic, {topic_id: id})
       true
     end
+    if category_id.nil? && (archetype.nil? || archetype == Archetype.default)
+      self.category_id = SiteSetting.uncategorized_category_id
+    end
   end
 
   after_save do
+    return if skip_callbacks
+
     if auto_close_at and (auto_close_at_changed? or auto_close_user_id_changed?)
       Jobs.enqueue_at(auto_close_at, :close_topic, {topic_id: id, user_id: auto_close_user_id || user_id})
     end
+  end
+
+  def self.count_exceeds_minimum?
+    count > SiteSetting.minimum_topics_similar
   end
 
   def best_post
@@ -332,8 +349,13 @@ class Topic < ActiveRecord::Base
         Category.where(['id = ?', category_id]).update_all 'topic_count = topic_count - 1'
       end
 
-      self.category_id = cat.id
-      if save
+      success = true
+      if self.category_id != cat.id
+        self.category_id = cat.id
+        success = save
+      end
+
+      if success
         CategoryFeaturedTopic.feature_topics_for(old_category)
         Category.where(id: cat.id).update_all 'topic_count = topic_count + 1'
         CategoryFeaturedTopic.feature_topics_for(cat) unless old_category.try(:id) == cat.try(:id)
@@ -371,20 +393,15 @@ class Topic < ActiveRecord::Base
 
   # Changes the category to a new name
   def change_category(name)
-    self.do_category_validation = true
-
     # If the category name is blank, reset the attribute
     if name.blank?
-      if category_id.present?
-        CategoryFeaturedTopic.feature_topics_for(category)
-        Category.where(id: category_id).update_all 'topic_count = topic_count - 1'
-      end
-      self.category_id = nil
-      return save
+      cat = Category.where(id: SiteSetting.uncategorized_category_id).first
+    else
+      cat = Category.where(name: name).first
     end
 
-    cat = Category.where(name: name).first
     return true if cat == category
+    return false unless cat
     changed_to_category(cat)
   end
 

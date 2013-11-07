@@ -43,6 +43,7 @@ class User < ActiveRecord::Base
   has_many :secure_categories, through: :groups, source: :categories
 
   has_one :user_search_data, dependent: :destroy
+  has_one :api_key, dependent: :destroy
 
   belongs_to :uploaded_avatar, class_name: 'Upload', dependent: :destroy
 
@@ -51,6 +52,7 @@ class User < ActiveRecord::Base
   validates :email, presence: true, uniqueness: true
   validates :email, email: true, if: :email_changed?
   validate :password_validator
+  validates :ip_address, allowed_ip_address: {on: :create, message: :signup_not_allowed}
 
   before_save :cook
   before_save :update_username_lower
@@ -122,19 +124,19 @@ class User < ActiveRecord::Base
   end
 
   def self.find_by_username_or_email(username_or_email)
-    conditions = if username_or_email.include?('@')
-      { email: Email.downcase(username_or_email) }
+    if username_or_email.include?('@')
+      find_by_email(username_or_email)
     else
-      { username_lower: username_or_email.downcase }
+      find_by_username(username_or_email)
     end
+  end
 
-    users = User.where(conditions).to_a
+  def self.find_by_email(email)
+    where(email: Email.downcase(email)).first
+  end
 
-    if users.size > 1
-      raise Discourse::TooManyMatches
-    else
-      users.first
-    end
+  def self.find_by_username(username)
+    where(username_lower: username.downcase).first
   end
 
   def enqueue_welcome_message(message_type)
@@ -471,6 +473,26 @@ class User < ActiveRecord::Base
     created_at > 1.day.ago
   end
 
+  def update_avatar(upload)
+    self.uploaded_avatar_template = nil
+    self.uploaded_avatar = upload
+    self.use_uploaded_avatar = true
+    self.save!
+  end
+
+  def generate_api_key(created_by)
+    if api_key.present?
+      api_key.regenerate!(created_by)
+      api_key
+    else
+      ApiKey.create(user: self, key: SecureRandom.hex(32), created_by: created_by)
+    end
+  end
+
+  def revoke_api_key
+    ApiKey.where(user_id: self.id).delete_all
+  end
+
   protected
 
   def cook
@@ -558,6 +580,7 @@ class User < ActiveRecord::Base
       end
     end
   end
+
 
   private
 
