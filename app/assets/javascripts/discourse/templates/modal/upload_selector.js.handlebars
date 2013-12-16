@@ -1,14 +1,16 @@
 <div class="modal-body">
-  <div class="radios">
-    <input type="radio" id="local" value="local" name="upload" {{action useLocal}}>
-    <label class="radio" for="local">{{i18n upload_selector.from_my_computer}}</label>
-    {{#if controller.local}}
-      <div class="inputs">
-        <input type="file" id="filename-input"><br>
-        <span class="description">{{unbound view.tip}}</span>
-      </div>
-    {{/if}}
-  </div>
+  {{#if allowLocal}}
+    <div class="radios">
+      <input type="radio" id="local" value="local" name="upload" {{action useLocal}}>
+      <label class="radio" for="local">{{i18n upload_selector.from_my_computer}}</label>
+      {{#if controller.local}}
+        <div class="inputs">
+          <input type="file" id="filename-input"><br>
+          <span class="description">{{unbound view.tip}}</span>
+        </div>
+      {{/if}}
+    </div>
+  {{/if}}
   <div class="radios">
     <input type="radio" id="remote" value="remote" name="upload" {{action useRemote}}>
     <label class="radio" for="remote">{{i18n upload_selector.from_the_web}}</label>
@@ -27,9 +29,9 @@
 </div>
 
 <div class="modal-footer">
-  <button class="btn btn-primary" data-dismiss="modal" {{action upload target="view"}}>
+  <button class="btn btn-primary" {{action upload target="view"}}>
     <span class='add-upload'><i {{bindAttr class="view.uploadIcon"}}></i><i class='icon-plus'></i></span>
     {{i18n upload}}
   </button>
-  <a data-dismiss="modal">{{i18n cancel}}</a>
+  <a {{action closeModal}}>{{i18n cancel}}</a>
 </div>

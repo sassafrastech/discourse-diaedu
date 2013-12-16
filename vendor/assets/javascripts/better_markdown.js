@@ -335,7 +335,7 @@
       // __foo__ is reserved and not a pattern
       if ( i.match( /^__.*__$/) )
         continue;
-      var l = i.replace( /([\\.*+?|()\[\]{}])/g, "\\$1" )
+      var l = i.replace( /([\\.*+?^$|()\[\]{}])/g, "\\$1" )
                .replace( /\n/, "\\n" );
       patterns.push( i.length === 1 ? l : "(?:" + l + ")" );
     }
@@ -643,7 +643,8 @@
   var DialectHelpers = {};
   DialectHelpers.inline_until_char = function( text, want ) {
     var consumed = 0,
-        nodes = [];
+        nodes = [],
+        patterns = this.dialect.inline.__patterns__.replace('|_|', '|');
 
     while ( true ) {
       if ( text.charAt( consumed ) === want ) {
@@ -654,10 +655,10 @@
 
       if ( consumed >= text.length ) {
         // No closing char found. Abort.
-        return null;
+        return [consumed, null, nodes];
       }
 
-      var res = this.dialect.inline.__oneElement__.call(this, text.substr( consumed ) );
+      var res = this.dialect.inline.__oneElement__.call(this, text.substr( consumed ), patterns );
       consumed += res[ 0 ];
       // Add any returned nodes.
       nodes.push.apply( nodes, res.slice( 1 ) );
@@ -1249,13 +1250,24 @@
 
       "[": function link( text ) {
 
+        var open = 1;
+        for (var i=0; i<text.length; i++) {
+          var c = text.charAt(i);
+          if (c === '[') { open++; }
+          if (c === ']') { open--; }
+
+          if (open > 3) { return [1, "["]; }
+        }
+
         var orig = String(text);
         // Inline content is possible inside `link text`
         var res = inline_until_char.call( this, text.substr(1), "]" );
 
         // No closing ']' found. Just consume the [
-        if ( !res )
-          return [ 1, "[" ];
+        if ( !res[1] ) {
+          var size = res[0] + 1;
+          return [ size, text.charAt(0) + res[2].join('') ];
+        }
 
         var consumed = 1 + res[ 0 ],
             children = res[ 1 ],

@@ -272,8 +272,7 @@ nb_NO:
     unmute: "Udemp"
     last_post: "Siste Innlegg"
 
-    best_of:
-      title: "De Beste"
+    summary:
       enabled_description: "Du er for øyeblikket i De Beste modus i dette emnet."
       description: "Det er <b>{{count}}</b> innlegg i dette emnet. Det er mange! Will du spare tid ved å vise bare de beste innleggene?"
       enable: 'Bytt til "De Beste" modus'
@@ -478,7 +477,6 @@ nb_NO:
       title: Topic Rank Details
 
     topic:
-      create_in: 'Lag {{categoryName}} Emne'
       create: 'Lag Emne'
       create_long: 'Lag ett nytt Emne'
       private_message: 'Start enn private melding'
@@ -610,21 +608,9 @@ nb_NO:
       login_reply: 'Logg Inn for å Svare'
 
       filters:
-        user: "Du ser bare på {{n_posts}} {{by_n_users}}."
         n_posts:
           one: "1 innlegg"
           other: "{{count}} innlegg"
-        by_n_users:
-          one: "skrevet av 1 spesifikk bruker"
-          other: "skrevet av {{count}} spesifikke brukere"
-
-        best_of: "Du ser på {{n_best_posts}} {{of_n_posts}}."
-        n_best_posts:
-          one: "1 beste innlegg"
-          other: "{{count}} beste innlegg"
-        of_n_posts:
-          one: "av 1 i emnet"
-          other: "av {{count}} i emnet"
         cancel: "Vis alle innlegg i dette emnet igjen."
 
       split_topic:
@@ -841,11 +827,10 @@ nb_NO:
         more: "{{n}} igjen..."
         left: "{{n}} gjenstående"
 
-    topic_summary:
+    topic_map:
       title: "Emneoppsummering"
       links_shown: "vis alle {{totalLinks}} linker..."
       clicks: "klikk"
-      topic_link: "emnelink"
 
     topic_statuses:
       locked:
@@ -865,7 +850,7 @@ nb_NO:
     views_long: "dette emnet har blit sett {{number}} ganger"
     activity: "Aktivitet"
     likes: "Likes"
-    top_contributors: "Deltakere"
+    users: "Deltakere"
     category_title: "Kategori"
     history: "Historie"
     changed_by: "av {{author}}"
@@ -1046,13 +1031,13 @@ nb_NO:
           moderators: 'Moderatorer'
 
       user:
-        ban_failed: "Noe gikk galt ved å bannlyse denne brukeren {{error}}"
-        unban_failed: "Noe gikk galt ved å gjeninsette denne brukeren {{error}}"
-        ban_duration: "Hvor lenge vil du bannlyse denne brukeren? (dager)"
+        suspend_failed: "Noe gikk galt ved å bannlyse denne brukeren {{error}}"
+        unsuspend_failed: "Noe gikk galt ved å gjeninsette denne brukeren {{error}}"
+        suspend_duration: "Hvor lenge vil du bannlyse denne brukeren? (dager)"
         delete_all_posts: "Slett alle innlegg"
-        ban: "Bannlyst"
-        unban: Gjeninnsett"
-        banned: "Banlyst?"
+        suspend: "Bannlyst"
+        unsuspend: Gjeninnsett"
+        suspended: "Banlyst?"
         moderator: "Moderator?"
         admin: "Admin?"
         show_admin_profile: "Admin"

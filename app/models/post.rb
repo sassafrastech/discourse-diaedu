@@ -175,8 +175,8 @@ class Post < ActiveRecord::Base
     order('sort_order desc, post_number desc')
   end
 
-  def self.best_of
-    where(["(post_number = 1) or (percent_rank <= ?)", SiteSetting.best_of_percent_filter.to_f / 100.0])
+  def self.summary
+    where(["(post_number = 1) or (percent_rank <= ?)", SiteSetting.summary_percent_filter.to_f / 100.0])
   end
 
   def update_flagged_posts_count
@@ -353,8 +353,11 @@ class Post < ActiveRecord::Base
   end
 
   # Enqueue post processing for this post
-  def trigger_post_process
-    args = { post_id: id }
+  def trigger_post_process(bypass_bump = false)
+    args = {
+      post_id: id,
+      bypass_bump: bypass_bump
+    }
     args[:image_sizes] = image_sizes if image_sizes.present?
     args[:invalidate_oneboxes] = true if invalidate_oneboxes.present?
     Jobs.enqueue(:process_post, args)
@@ -452,6 +455,7 @@ end
 #  notify_user_count       :integer          default(0), not null
 #  like_score              :integer          default(0), not null
 #  deleted_by_id           :integer
+#  edit_reason             :string(255)
 #
 # Indexes
 #
@@ -459,4 +463,3 @@ end
 #  index_posts_on_reply_to_post_number      (reply_to_post_number)
 #  index_posts_on_topic_id_and_post_number  (topic_id,post_number) UNIQUE
 #
-

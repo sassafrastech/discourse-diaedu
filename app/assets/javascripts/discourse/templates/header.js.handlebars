@@ -4,8 +4,8 @@
   <div class='contents clearfix'>
 
     {{partial 'diaedu/templates/subnav'}}
-    
-    {{view.logoHTML}}
+
+    {{home-logo minimized=showExtraInfo}}
 
     {{#if showExtraInfo}}
       <div class="extra-info-wrapper">
@@ -14,6 +14,7 @@
             <a {{bindAttr class=":star topic.starred:starred"}} {{action toggleStar}} href='#' {{bindAttr title="topic.favoriteTooltip"}}></a>
           {{/if}}
           <h1>
+          {{boundCategoryLink topic.category}}
           {{#if topic.details.loaded}}
             {{topicStatus topic=topic}}
             <a class='topic-link' href='{{unbound topic.url}}'>{{{topic.fancy_title}}}</a>
@@ -24,7 +25,6 @@
               {{i18n topic.loading}}
             {{/if}}
           {{/if}}
-          {{boundCategoryLink topic.category}}
           </h1>
         </div>
       </div>
@@ -34,7 +34,7 @@
       {{#unless showExtraInfo}}
         <div class='current-username'>
           {{#if currentUser}}
-            <span class='username'><a {{bindAttr href="currentUser.path"}}>{{currentUser.name}}</a></span>
+            <span class='username'><a {{bindAttr href="currentUser.path"}}>{{currentUser.displayName}}</a></span>
           {{else}}
             <button {{action showLogin}} class='btn btn-primary btn-small'>{{i18n log_in}}</button>
           {{/if}}
@@ -78,8 +78,10 @@
           {{else}}
             <a class='icon'
                data-dropdown="site-map-dropdown"
+               data-render="renderSiteMap"
                href="#"
-               title='{{i18n site_map}}'>
+               title='{{i18n site_map}}'
+               id="site-map">
                <i class='icon-reorder'></i>
             </a>
           {{/if}}
@@ -89,7 +91,7 @@
         </li>
         <li class='current-user'>
           {{#if currentUser}}
-            {{#link-to 'userActivity.index' currentUser titleKey="current_user" class="icon"}}{{boundAvatar currentUser imageSize="medium" }}{{/link-to}}
+            {{#titledLinkTo 'userActivity.index' currentUser titleKey="current_user" class="icon"}}{{boundAvatar currentUser imageSize="medium" }}{{/titledLinkTo}}
           {{else}}
             <div class="icon not-logged-in-avatar" {{action showLogin}}><i class='icon-user'></i></div>
           {{/if}}
@@ -98,64 +100,11 @@
 
       {{render search}}
 
-      <section class='d-dropdown' id='notifications-dropdown'>
-        {{#if view.notifications}}
-          <ul>
-            {{#each view.notifications}}
-            <li class="{{unbound readClass}}">{{{unbound rendered}}}</li>
-            {{/each}}
-            <li class='read last'>
-              <a {{bindAttr href="currentUser.path"}}>{{i18n notifications.more}} &hellip;</a>
-            </li>
-          </ul>
-        {{else}}
-          <div class='none'>{{i18n notifications.none}}</div>
-        {{/if}}
-      </section>
+      {{render notifications notifications}}
 
-      <section class='d-dropdown' id='site-map-dropdown'>
-      <ul class="location-links">
-        {{#if currentUser.staff}}
-          <li><a href="/admin"><i class='icon icon-wrench'></i>{{i18n admin_title}}</a></li>
-          <li><a href="/admin/flags/active"><i class='icon icon-flag'></i>{{i18n flags_title}}</a>
-          {{#if currentUser.site_flagged_posts_count}}
-            <a href='/admin/flags/active' title='{{i18n notifications.total_flagged}}' class='badge-notification flagged-posts'>{{currentUser.site_flagged_posts_count}}</a>
-          {{/if}}
-          </li>
-        {{/if}}
-        <li>
-          {{#titledLinkTo "list.latest" titleKey="filters.latest.help"}}{{i18n filters.latest.title}}{{/titledLinkTo}}
-        </li>
-        <li>{{faqLink}}</li>
-        {{#if showMobileToggle}}
-          <li>
-            <a href="#" {{action toggleMobileView}}>
-              {{#if mobileView}}
-                {{i18n desktop_view}}
-              {{else}}
-                {{i18n mobile_view}}
-              {{/if}}
-            </a>
-          </li>
-        {{/if}}
-      </ul>
-
-      {{#if categories}}
-        <ul class="category-links">
-          <li class='heading' title="{{i18n filters.categories.help}}">
-            {{#link-to "list.categories"}}{{i18n filters.categories.title}}{{/link-to}}
-          </li>
-
-          {{#each categories}}
-            <li class='category'>
-              {{categoryLink this allowUncategorized=true}}
-              <b>{{unbound topic_count}}</b></a>
-            </li>
-          {{/each}}
-        </ul>
+      {{#if view.renderSiteMap}}
+        {{render siteMap}}
       {{/if}}
-
-    </section>
 
     </div>
   </div>

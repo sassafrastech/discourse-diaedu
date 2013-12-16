@@ -62,8 +62,8 @@ describe TopicsController do
         let(:p2) { Fabricate(:post, user: user) }
 
         before do
-          Topic.any_instance.expects(:move_posts).with(user, [p2.id], title: 'blah').returns(topic)
-          xhr :post, :move_posts, topic_id: topic.id, title: 'blah', post_ids: [p2.id]
+          Topic.any_instance.expects(:move_posts).with(user, [p2.id], title: 'blah', category_id: 123).returns(topic)
+          xhr :post, :move_posts, topic_id: topic.id, title: 'blah', post_ids: [p2.id], category_id: 123
         end
 
         it "returns success" do
@@ -739,12 +739,12 @@ describe TopicsController do
   describe 'autoclose' do
 
     it 'needs you to be logged in' do
-      lambda { xhr :put, :autoclose, topic_id: 99, auto_close_days: 3}.should raise_error(Discourse::NotLoggedIn)
+      lambda { xhr :put, :autoclose, topic_id: 99, auto_close_time: '24'}.should raise_error(Discourse::NotLoggedIn)
     end
 
     it 'needs you to be an admin or mod' do
       user = log_in
-      xhr :put, :autoclose, topic_id: 99, auto_close_days: 3
+      xhr :put, :autoclose, topic_id: 99, auto_close_time: '24'
       response.should be_forbidden
     end
 
@@ -755,13 +755,15 @@ describe TopicsController do
       end
 
       it "can set a topic's auto close time" do
-        Topic.any_instance.expects(:set_auto_close).with("3", @admin)
-        xhr :put, :autoclose, topic_id: @topic.id, auto_close_days: 3
+        Topic.any_instance.expects(:set_auto_close).with("24", @admin)
+        xhr :put, :autoclose, topic_id: @topic.id, auto_close_time: '24'
+        json = ::JSON.parse(response.body)
+        json.should have_key('auto_close_at')
       end
 
       it "can remove a topic's auto close time" do
         Topic.any_instance.expects(:set_auto_close).with(nil, anything)
-        xhr :put, :autoclose, topic_id: @topic.id, auto_close_days: nil
+        xhr :put, :autoclose, topic_id: @topic.id, auto_close_time: nil
       end
     end
 

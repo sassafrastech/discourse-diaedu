@@ -17,7 +17,9 @@ class UserSerializer < BasicUserSerializer
              :trust_level,
              :moderator,
              :admin,
-             :title
+             :title,
+             :suspend_reason,
+             :suspended_till
 
   has_one :invited_by, embed: :object, serializer: BasicUserSerializer
 
@@ -90,6 +92,16 @@ class UserSerializer < BasicUserSerializer
 
   def gravatar_template
     User.gravatar_template(object.email)
+  end
+
+  def include_suspended?
+    object.suspended?
+  end
+  def include_suspend_reason?
+    object.suspended?
+  end
+  def include_suspended_till?
+    object.suspended?
   end
 
 end

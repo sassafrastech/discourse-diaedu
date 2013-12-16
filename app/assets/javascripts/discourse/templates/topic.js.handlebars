@@ -1,6 +1,8 @@
+{{view Discourse.HtmlView key="top"}}
+
 {{#if postStream.loaded}}
 
-  {{#if postStream.firstPostLoaded}}
+  {{#if postStream.firstPostPresent}}
     <div id='topic-title'>
       <div class='container'>
         <div class='inner'>
@@ -10,13 +12,14 @@
           {{/if}}
 
           {{#if editingTopic}}
-            {{textField id='edit-title' value=newTitle}}
             {{categoryChooser valueAttribute="id" value=newCategoryId source=category_id}}
+            {{textField id='edit-title' value=newTitle}}
 
             <button class='btn btn-primary btn-small' {{action finishedEditingTopic}}><i class='icon-ok'></i></button>
             <button class='btn btn-small' {{action cancelEditingTopic}}><i class='icon-remove'></i></button>
           {{else}}
             <h1>
+              {{boundCategoryLink category}}
               {{#if details.loaded}}
                 {{topicStatus topic=model}}
                 <a href='{{unbound url}}'>
@@ -27,7 +30,7 @@
                   {{/if}}
                 </a>
               {{/if}}
-              {{boundCategoryLink category}}
+
 
               {{#if details.can_edit}}
                 <a href='#' {{action editTopic}} class='edit-topic' title='{{i18n edit}}'><i class="icon-pencil"></i></a>
@@ -48,10 +51,10 @@
           <div id='topic-progress-wrapper' {{bindAttr class="dockedCounter:docked"}}>
             <nav id='topic-progress' title="{{i18n topic.progress.title}}" {{bindAttr class="hideProgress:hidden"}}>
               <button id='jump-top' title="{{i18n topic.progress.jump_top}}" {{bindAttr disabled="jumpTopDisabled"}} {{action jumpTop}}><i class="icon-circle-arrow-up"></i></button>
-              <div class='nums'>
-                <h4 title="{{i18n topic.progress.current}}">{{progressPosition}}</h4> <span>{{i18n of_value}}</span> <h4>{{postStream.filteredPostsCount}}</h4>
+              <div class='nums' {{bindAttr title="progressPositionTitle"}}>
+                <h4>{{progressPosition}}</h4><span {{bindAttr class="hugeNumberOfPosts:hidden"}}> <span>{{i18n of_value}}</span> <h4>{{postStream.filteredPostsCount}}</h4></span>
               </div>
-              <button id='jump-bottom' title="{{i18n topic.progress.jump_bottom}}" {{bindAttr disabled="jumpBottomDisabled"}} {{action jumpBottom}}><i class="icon-circle-arrow-down"></i></button>
+              <button id='jump-bottom' {{bindAttr title="jumpToBottomTitle"}} {{bindAttr disabled="jumpBottomDisabled"}} {{action jumpBottom}}><i class="icon-circle-arrow-down"></i></button>
               <div class='bg'>&nbsp;</div>
             </nav>
           </div>
@@ -61,7 +64,7 @@
           {{/if}}
 
           {{#unless postStream.loadingFilter}}
-            {{collection itemViewClass="Discourse.PostView" contentBinding="postStream.posts" topicViewBinding="view"}}
+            {{cloaked-collection cloakView="post" idProperty="post_number" defaultHeight="200" content=postStream.posts slackRatio=slackRatio}}
           {{/unless}}
 
           {{#if postStream.loadingBelow}}
@@ -73,7 +76,7 @@
         {{#if postStream.loadingFilter}}
           <div class='spinner small'>{{i18n loading}}</div>
         {{else}}
-          {{#if postStream.lastPostLoaded}}
+          {{#if postStream.loadedAllPosts}}
 
             {{view Discourse.TopicClosingView topicBinding="model"}}
             {{view Discourse.TopicFooterButtonsView topicBinding="model"}}
@@ -82,7 +85,7 @@
               <div id='suggested-topics'>
                 <h3>{{i18n suggested_topics.title}}</h3>
                 <div class='topics'>
-                  {{basicTopicList topics=details.suggested_topics}}
+                  {{basic-topic-list topics=details.suggested_topics}}
                 </div>
                 <br/>
                 <h3>{{{view.browseMoreMessage}}}</h3>
@@ -118,12 +121,6 @@
   {{/if}}
 {{/if}}
 
-
-<div id='topic-filter' {{bindAttr class="postStream.hasNoFilters:hidden"}}>
-  {{postStream.filterDesc}}
-  <a href='#' {{action cancelFilter target="postStream"}}>{{i18n topic.filters.cancel}}</a>
-</div>
-
 {{render share}}
 {{render posterExpansion}}
 
@@ -135,3 +132,4 @@
   {{render topicAdminMenu content}}
 {{/if}}
 
+{{view Discourse.HtmlView key="bottom"}}

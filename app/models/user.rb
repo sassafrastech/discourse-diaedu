@@ -8,9 +8,11 @@ require_dependency 'post_destroyer'
 require_dependency 'user_name_suggester'
 require_dependency 'roleable'
 require_dependency 'pretty_text'
+require_dependency 'url_helper'
 
 class User < ActiveRecord::Base
   include Roleable
+  include UrlHelper
 
   has_many :posts
   has_many :notifications, dependent: :destroy
@@ -28,7 +30,7 @@ class User < ActiveRecord::Base
   has_many :user_visits, dependent: :destroy
   has_many :invites, dependent: :destroy
   has_many :topic_links, dependent: :destroy
-  has_many :uploads, dependent: :destroy
+  has_many :uploads
 
   has_one :facebook_user_info, dependent: :destroy
   has_one :twitter_user_info, dependent: :destroy
@@ -46,6 +48,8 @@ class User < ActiveRecord::Base
   has_one :api_key, dependent: :destroy
 
   belongs_to :uploaded_avatar, class_name: 'Upload', dependent: :destroy
+
+  delegate :last_sent_email_address, :to => :email_logs
 
   validates_presence_of :username
   validate :username_validator
@@ -78,8 +82,8 @@ class User < ActiveRecord::Base
   attr_accessor :notification_channel_position
 
   scope :blocked, -> { where(blocked: true) } # no index
-  scope :banned, -> { where('banned_till IS NOT NULL AND banned_till > ?', Time.zone.now) } # no index
-  scope :not_banned, -> { where('banned_till IS NULL') }
+  scope :suspended, -> { where('suspended_till IS NOT NULL AND suspended_till > ?', Time.zone.now) } # no index
+  scope :not_suspended, -> { where('suspended_till IS NULL') }
   # excluding fake users like the community user
   scope :real, -> { where('id > 0') }
 
@@ -276,25 +280,16 @@ class User < ActiveRecord::Base
     end
   end
 
-  def update_last_seen!(now=nil)
-    now ||= Time.zone.now
+  def update_last_seen!(now=Time.zone.now)
     now_date = now.to_date
-
     # Only update last seen once every minute
-    redis_key = "user:#{self.id}:#{now_date}"
-    if $redis.setnx(redis_key, "1")
-      $redis.expire(redis_key, SiteSetting.active_user_rate_limit_secs)
+    redis_key = "user:#{id}:#{now_date}"
+    return unless $redis.setnx(redis_key, "1")
 
-      update_visit_record!(now_date)
-
-      # using update_column to avoid the AR transaction
-      # Keep track of our last visit
-      if seen_before? && (self.last_seen_at < (now - SiteSetting.previous_visit_timeout_hours.hours))
-        previous_visit_at = last_seen_at
-        update_column(:previous_visit_at, previous_visit_at)
-      end
-      update_column(:last_seen_at, now)
-    end
+    $redis.expire(redis_key, SiteSetting.active_user_rate_limit_secs)
+    update_previous_visit(now)
+    # using update_column to avoid the AR transaction
+    update_column(:last_seen_at, now)
   end
 
   def self.gravatar_template(email)
@@ -308,20 +303,20 @@ class User < ActiveRecord::Base
   #   - emails
   def small_avatar_url
     template = avatar_template
-    template.gsub("{size}", "45")
+    schemaless template.gsub("{size}", "45")
   end
 
   # the avatars might take a while to generate
   # so return the url of the original image in the meantime
   def uploaded_avatar_path
     return unless SiteSetting.allow_uploaded_avatars? && use_uploaded_avatar
-    uploaded_avatar_template.present? ? uploaded_avatar_template : uploaded_avatar.try(:url)
+    avatar_template = uploaded_avatar_template.present? ? uploaded_avatar_template : uploaded_avatar.try(:url)
+    schemaless avatar_template
   end
 
   def avatar_template
     uploaded_avatar_path || User.gravatar_template(email)
   end
-
 
   # The following count methods are somewhat slow - definitely don't use them in a loop.
   # They might need to be denormalized
@@ -364,8 +359,16 @@ class User < ActiveRecord::Base
     end
   end
 
-  def is_banned?
-    banned_till && banned_till > DateTime.now
+  def suspended?
+    suspended_till && suspended_till > DateTime.now
+  end
+
+  def suspend_record
+    UserHistory.for(self, :suspend_user).order('id DESC').first
+  end
+
+  def suspend_reason
+    suspend_record.try(:details) if suspended?
   end
 
   # Use this helper to determine if the user has a particular trust level.
@@ -473,9 +476,9 @@ class User < ActiveRecord::Base
     created_at > 1.day.ago
   end
 
-  def update_avatar(upload)
+  def upload_avatar(avatar)
     self.uploaded_avatar_template = nil
-    self.uploaded_avatar = upload
+    self.uploaded_avatar = avatar
     self.use_uploaded_avatar = true
     self.save!
   end
@@ -493,6 +496,10 @@ class User < ActiveRecord::Base
     ApiKey.where(user_id: self.id).delete_all
   end
 
+  def find_email
+    last_sent_email_address || email
+  end
+
   protected
 
   def cook
@@ -505,14 +512,7 @@ class User < ActiveRecord::Base
 
   def update_tracked_topics
     return unless auto_track_topics_after_msecs_changed?
-
-    where_conditions = {notifications_reason_id: nil, user_id: id}
-    if auto_track_topics_after_msecs < 0
-      TopicUser.where(where_conditions).update_all({notification_level: TopicUser.notification_levels[:regular]})
-    else
-      TopicUser.where(where_conditions).update_all(["notification_level = CASE WHEN total_msecs_viewed < ? THEN ? ELSE ? END",
-                            auto_track_topics_after_msecs, TopicUser.notification_levels[:regular], TopicUser.notification_levels[:tracking]])
-    end
+    TrackedTopicsUpdater.new(id, auto_track_topics_after_msecs).call
   end
 
   def create_user_stat
@@ -581,8 +581,19 @@ class User < ActiveRecord::Base
     end
   end
 
-
   private
+
+  def previous_visit_at_update_required?(timestamp)
+    seen_before? &&
+      (last_seen_at < (timestamp - SiteSetting.previous_visit_timeout_hours.hours))
+  end
+
+  def update_previous_visit(timestamp)
+    update_visit_record!(timestamp.to_date)
+    if previous_visit_at_update_required?(timestamp)
+      update_column(:previous_visit_at, last_seen_at)
+    end
+  end
 
 end
 
@@ -618,13 +629,13 @@ end
 #  approved_at                   :datetime
 #  digest_after_days             :integer
 #  previous_visit_at             :datetime
-#  banned_at                     :datetime
-#  banned_till                   :datetime
+#  suspended_at                  :datetime
+#  suspended_till                :datetime
 #  date_of_birth                 :date
 #  auto_track_topics_after_msecs :integer
 #  views                         :integer          default(0), not null
 #  flag_level                    :integer          default(0), not null
-#  ip_address                    :string
+#  ip_address                    :inet
 #  new_topic_duration_minutes    :integer
 #  external_links_in_new_tab     :boolean          default(FALSE), not null
 #  enable_quoting                :boolean          default(TRUE), not null
@@ -645,4 +656,3 @@ end
 #  index_users_on_username        (username) UNIQUE
 #  index_users_on_username_lower  (username_lower) UNIQUE
 #
-

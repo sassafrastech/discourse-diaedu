@@ -37,19 +37,22 @@ Discourse.FilteredListRoute = Discourse.Route.extend({
       listContent.set('loaded', false);
     }
 
+    listController.set('category', null);
     listController.load(this.filter).then(function(topicList) {
-      listController.set('category', null);
       listController.set('canCreateTopic', topicList.get('can_create_topic'));
       listTopicsController.set('model', topicList);
-
-      var scrollPos = Discourse.Session.currentProp('topicListScrollPosition');
-      if (scrollPos) {
-        Em.run.next(function() {
-          $('html, body').scrollTop(scrollPos);
-        });
-        Discourse.Session.current().set('topicListScrollPosition', null);
-      }
+      Discourse.FilteredListRoute.scrollToLastPosition();
     });
+  }
+});
+
+Discourse.FilteredListRoute.reopenClass({
+  scrollToLastPosition: function() {
+    var scrollPos = Discourse.Session.currentProp('topicListScrollPosition');
+    if (scrollPos) {
+      Em.run.next(function() { $('html, body').scrollTop(scrollPos); });
+      Discourse.Session.currentProp('topicListScrollPosition', null);
+    }
   }
 });
 

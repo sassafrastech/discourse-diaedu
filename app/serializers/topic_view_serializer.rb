@@ -12,14 +12,17 @@ class TopicViewSerializer < ApplicationSerializer
      :created_at,
      :views,
      :reply_count,
+     :participant_count,
+     :like_count,
      :last_posted_at,
      :visible,
      :closed,
      :archived,
-     :has_best_of,
+     :has_summary,
      :archetype,
      :slug,
      :category_id,
+     :word_count,
      :deleted_at]
   end
 

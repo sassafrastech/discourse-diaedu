@@ -153,12 +153,15 @@ class TopicsController < ApplicationController
   end
 
   def autoclose
-    raise Discourse::InvalidParameters.new(:auto_close_days) unless params.has_key?(:auto_close_days)
-    @topic = Topic.where(id: params[:topic_id].to_i).first
-    guardian.ensure_can_moderate!(@topic)
-    @topic.set_auto_close(params[:auto_close_days], current_user)
-    @topic.save
-    render nothing: true
+    raise Discourse::InvalidParameters.new(:auto_close_time) unless params.has_key?(:auto_close_time)
+    topic = Topic.where(id: params[:topic_id].to_i).first
+    guardian.ensure_can_moderate!(topic)
+    topic.set_auto_close(params[:auto_close_time], current_user)
+    if topic.save
+      render json: success_json.merge!(auto_close_at: topic.auto_close_at)
+    else
+      render_json_error(topic)
+    end
   end
 
   def destroy
@@ -227,6 +230,8 @@ class TopicsController < ApplicationController
 
   def move_posts
     params.require(:post_ids)
+    params.require(:topic_id)
+    params.permit(:category_id)
 
     topic = Topic.where(id: params[:topic_id]).first
     guardian.ensure_can_move_posts!(topic)
@@ -325,6 +330,7 @@ class TopicsController < ApplicationController
     args = {}
     args[:title] = params[:title] if params[:title].present?
     args[:destination_topic_id] = params[:destination_topic_id].to_i if params[:destination_topic_id].present?
+    args[:category_id] = params[:category_id].to_i if params[:category_id].present?
 
     topic.move_posts(current_user, post_ids_including_replies, args)
   end
