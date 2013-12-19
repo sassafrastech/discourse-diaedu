@@ -92,16 +92,9 @@ config/version.rb
 .ruby-version
 .ruby-gemset
 .rbenv
-
 bundler_stubs/*
 
 vendor/bundle/*
-
-# ignore my test engine
-vendor/gems/test_engine
-
-# ignore diaedu plugin
-vendor/gems/diaedu
 
 # ignore migrations copied from diaedu plugin
 db/migrate/*.diaedu.rb

@@ -201,7 +201,7 @@ group :profile do
 end
 
 # our fancy plugin!
-gem 'diaedu', path: 'vendor/gems/diaedu'
+gem 'diaedu', path: 'plugins/diaedu'
 
 # these should be moved to diaedu eventually
 
