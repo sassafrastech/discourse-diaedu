@@ -205,12 +205,12 @@ gem 'diaedu', path: 'plugins/diaedu'
 
 # these should be moved to diaedu eventually
 
-group :development do
-  gem 'foreigner'
-end
+# foreign key management
+gem 'foreigner'
 
-group :development, :test do
-  gem 'random_data', :git => 'https://github.com/hooverlunch/random_data'
-  gem "factory_girl_rails", "~> 4.0"
-end
+# random data generation
+gem 'random_data', :git => 'https://github.com/hooverlunch/random_data'
+
+# object factories
+gem "factory_girl_rails", "~> 4.0"
 
