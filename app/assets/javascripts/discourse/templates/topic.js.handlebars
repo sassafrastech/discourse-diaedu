@@ -18,6 +18,10 @@
             <button class='btn btn-primary btn-small' {{action finishedEditingTopic}}><i class='icon-ok'></i></button>
             <button class='btn btn-small' {{action cancelEditingTopic}}><i class='icon-remove'></i></button>
           {{else}}
+
+            {{! should be made into plugin later somehow}}
+            {{view Discourse.KbLinkToKbButtonView}}
+
             <h1>
               {{boundCategoryLink category}}
               {{#if details.loaded}}
