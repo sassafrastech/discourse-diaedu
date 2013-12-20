@@ -95,6 +95,3 @@ config/version.rb
 bundler_stubs/*
 
 vendor/bundle/*
-
-# ignore migrations copied from diaedu plugin
-db/migrate/*.diaedu.rb
