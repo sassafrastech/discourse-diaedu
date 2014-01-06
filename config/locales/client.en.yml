@@ -162,7 +162,7 @@ en:
 
       user_mentioned_user: "<a href='{{user1Url}}'>{{user}}</a> mentioned <a href='{{user2Url}}'>{{another_user}}</a>"
       user_mentioned_you: "<a href='{{user1Url}}'>{{user}}</a> mentioned <a href='{{user2Url}}'>you</a>"
-      you_mentioned_user: "<a href='{{user1Url}}'>You</a> mentioned <a href='{{user2Url}}'>{{user}}</a>"
+      you_mentioned_user: "<a href='{{user1Url}}'>You</a> mentioned <a href='{{user2Url}}'>{{another_user}}</a>"
 
       posted_by_user: "Posted by <a href='{{userUrl}}'>{{user}}</a>"
       posted_by_you: "Posted by <a href='{{userUrl}}'>you</a>"
@@ -185,14 +185,23 @@ en:
 
     categories:
       all: "all categories"
-      only_category: "only {{categoryName}}"
+      all_subcategories: "all subcategories"
+      no_subcategory: "no subcategory"
       category: "Category"
-      posts: "Posts"
-      topics: "Topics"
+      posts: "New Posts"
+      topics: "New Topics"
       latest: "Latest"
       latest_by: "latest by"
       toggle_ordering: "toggle ordering control"
       subcategories: "Subcategories:"
+      topic_stats: "The number of new topics."
+      topic_stat_sentence:
+        one: "%{count} new topic in the past %{unit}."
+        other: "%{count} new topics in the past %{unit}."
+      post_stats: "The number of new posts."
+      post_stat_sentence:
+        one: "%{count} new post in the past %{unit}."
+        other: "%{count} new posts in the past %{unit}."
 
     user:
       said: "{{username}} said:"
@@ -265,7 +274,7 @@ en:
 
       name:
         title: "Name"
-        instructions: "The longer version of your name; does not need to be unique. Used for alternate @name matching and shown only on your user page."
+        instructions: "The long version of your name. Publicly visible, and used for @name matching."
         too_short: "Your name is too short."
         ok: "Your name looks good."
       username:
@@ -348,6 +357,7 @@ en:
         title: "Password"
         too_short: "Your password is too short."
         ok: "Your password looks good."
+        instructions: "Must be at least %{count} characters."
 
       ip_address:
         title: "Last IP Address"
@@ -375,6 +385,7 @@ en:
     month_desc: 'topics posted in the last 30 days'
     week: 'week'
     week_desc: 'topics posted in the last 7 days'
+    day: 'day'
 
     first_post: First post
     mute: Mute
@@ -528,15 +539,15 @@ en:
       none: "You have no notifications right now."
       more: "view older notifications"
       mentioned: "<span title='mentioned' class='icon'>@</span> {{username}} {{link}}"
-      quoted: "<i title='quoted' class='icon icon-quote-right'></i> {{username}} {{link}}"
-      replied: "<i title='replied' class='icon icon-reply'></i> {{username}} {{link}}"
-      posted: "<i title='replied' class='icon icon-reply'></i> {{username}} {{link}}"
-      edited: "<i title='edited' class='icon icon-pencil'></i> {{username}} {{link}}"
-      liked: "<i title='liked' class='icon icon-heart'></i> {{username}} {{link}}"
-      private_message: "<i class='icon icon-envelope-alt' title='private message'></i> {{username}} {{link}}"
-      invited_to_private_message: "<i class='icon icon-envelope-alt' title='private message'></i> {{username}} {{link}}"
-      invitee_accepted: "<i title='accepted your invitation' class='icon icon-signin'></i> {{username}} accepted your invitation"
-      moved_post: "<i title='moved post' class='icon icon-arrow-right'></i> {{username}} moved {{link}}"
+      quoted: "<i title='quoted' class='fa fa-quote-right'></i> {{username}} {{link}}"
+      replied: "<i title='replied' class='fa fa-reply'></i> {{username}} {{link}}"
+      posted: "<i title='replied' class='fa fa-reply'></i> {{username}} {{link}}"
+      edited: "<i title='edited' class='fa fa-pencil'></i> {{username}} {{link}}"
+      liked: "<i title='liked' class='fa fa-heart'></i> {{username}} {{link}}"
+      private_message: "<i class='fa fa-envelope-o' title='private message'></i> {{username}} {{link}}"
+      invited_to_private_message: "<i class='fa fa-envelope-o' title='private message'></i> {{username}} {{link}}"
+      invitee_accepted: "<i title='accepted your invitation' class='fa fa-sign-in'></i> {{username}} accepted your invitation"
+      moved_post: "<i title='moved post' class='fa fa-arrow-right'></i> {{username}} moved {{link}}"
       total_flagged: "total flagged posts"
 
     upload_selector:
@@ -946,6 +957,26 @@ en:
           one: "Are you sure you want to delete that post?"
           other: "Are you sure you want to delete all those posts?"
 
+      revisions:
+        controls:
+          first: "First revision"
+          previous: "Previous revision"
+          next: "Next revision"
+          last: "Last revision"
+          comparing_previous_to_current_out_of_total: "<strong>#{{previous}}</strong> vs. <strong>#{{current}}</strong> / {{total}}"
+        displays:
+          inline:
+            title: "Show the rendered output with additions and removals inline"
+            button: '<i class="fa fa-square-o"></i> HTML'
+          side_by_side:
+            title: "Show the rendered output diffs side-by-side"
+            button: '<i class="fa fa-columns"></i> HTML'
+          side_by_side_markdown:
+            title: "Show the markdown source diffs side-by-side"
+            button: '<i class="fa fa-columns"></i> Markdown'
+        details:
+          edited_by: "Edited by"
+
     category:
       can: 'can&hellip; '
       none: '(no category)'
@@ -983,6 +1014,7 @@ en:
       add_permission: "Add Permission"
       this_year: "this year"
       position: "position"
+      default_position: "Default Position"
       parent: "Parent Category"
 
     flagging:
@@ -1378,12 +1410,11 @@ en:
         flags_received_count: Flags Received
         approve: 'Approve'
         approved_by: "approved by"
-        approve_success: "User approved and email sent with activation
-          instructions."
-        approve_bulk_success: "Success! All selected users have been approved
-          and notified."
+        approve_success: "User approved and email sent with activation instructions."
+        approve_bulk_success: "Success! All selected users have been approved and notified."
         time_read: "Read Time"
         delete: "Delete User"
+        delete_forbidden_because_staff: "Admins and moderators can't be deleted."
         delete_forbidden:
           one: "Users can't be deleted if they registered more than %{count} day ago, or if they have posts. Delete all posts before trying to delete a user."
           other: "Users can't be deleted if they registered more than %{count} days ago, or if they have posts. Delete all posts before trying to delete a user."
@@ -1418,6 +1449,7 @@ en:
         reset: 'reset to default'
         none: 'none'
         no_results: "No results found."
+        clear_filter: "Clear"
         categories:
           all_results: 'All'
           required: 'Required'

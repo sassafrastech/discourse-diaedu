@@ -1,7 +1,9 @@
 require_dependency 'topic_view'
 require_dependency 'promotion'
+require_dependency 'url_helper'
 
 class TopicsController < ApplicationController
+  include UrlHelper
 
   before_filter :ensure_logged_in, only: [:timings,
                                           :destroy_timings,
@@ -57,7 +59,7 @@ class TopicsController < ApplicationController
 
     perform_show_response
 
-    canonical_url @topic_view.canonical_path
+    canonical_url absolute_without_cdn(@topic_view.canonical_path)
   end
 
   def wordpress
@@ -101,13 +103,14 @@ class TopicsController < ApplicationController
     # TODO: we may need smarter rules about converting archetypes
     topic.archetype = "regular" if current_user.admin? && archetype == 'regular'
 
+    topic.acting_user = current_user
+
     success = false
     Topic.transaction do
-      success = topic.save
-      success = topic.change_category(params[:category]) if success
+      success = topic.save && topic.change_category(params[:category])
     end
-    # this is used to return the title to the client as it may have been
-    # changed by "TextCleaner"
+
+    # this is used to return the title to the client as it may have been changed by "TextCleaner"
     success ? render_serialized(topic, BasicTopicSerializer) : render_json_error(topic)
   end
 

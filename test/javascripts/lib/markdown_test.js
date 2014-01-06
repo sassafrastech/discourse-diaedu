@@ -29,6 +29,14 @@ test("basic cooking", function() {
   cooked("brussel sproutes are *awful*.", "<p>brussel sproutes are <em>awful</em>.</p>", "it doesn't swallow periods.");
 });
 
+test("Auto quoting", function() {
+  cooked('"My fake plants died because I did not pretend to water them."',
+         "<p><blockquote>My fake plants died because I did not pretend to water them.</blockquote></p>",
+         "it converts single line quotes to blockquotes");
+  cooked('"hello\nworld"', "<p>\"hello<br/>world\"</p>", "It doesn't convert multi line quotes");
+  cooked('"hello "evil" trout"', '<p>"hello "evil" trout"</p>', "it doesn't format quotes in the middle of a line");
+});
+
 test("Traditional Line Breaks", function() {
   var input = "1\n2\n3";
   cooked(input, "<p>1<br/>2<br/>3</p>", "automatically handles trivial newlines");
@@ -320,7 +328,7 @@ test("Code Blocks", function() {
 test("sanitize", function() {
   var sanitize = Discourse.Markdown.sanitize;
 
-  equal(sanitize("<i class=\"icon-bug icon-spin\">bug</i>"), "<i>bug</i>");
+  equal(sanitize("<i class=\"fa-bug fa-spin\">bug</i>"), "<i>bug</i>");
   equal(sanitize("<div><script>alert('hi');</script></div>"), "<div></div>");
   equal(sanitize("<div><p class=\"funky\" wrong='1'>hello</p></div>"), "<div><p>hello</p></div>");
   cooked("hello<script>alert(42)</script>", "<p>hello</p>", "it sanitizes while cooking");

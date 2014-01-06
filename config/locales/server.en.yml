@@ -27,6 +27,8 @@ en:
   site_under_maintenance: 'Site is currently undergoing maintenance.'
   operation_already_running: "An %{operation} is currently running. Can't start a new %{operation} job right now."
 
+  too_many_replies: "Sorry you can't reply any more times in that topic."
+
   too_many_mentions:
     zero: "Sorry, you can't mention other users."
     one: "Sorry, you can only mention one other user in a post."
@@ -59,6 +61,9 @@ en:
   rss_posts_in_topic: "RSS feed of '%{topic}'"
   rss_topics_in_category: "RSS feed of topics in the '%{category}' category"
   author_wrote: "%{author} wrote:"
+  num_posts: "Posts:"
+  num_participants: "Participants:"
+  read_full_topic: "Read full topic"
   private_message_abbrev: "PM"
   rss_description:
     latest: "Latest topics"
@@ -128,6 +133,13 @@ en:
       This topic is clearly important to you &ndash; you've posted more than %{percent}% of the replies here.
 
       Are you sure you're providing adequate time for other people to share their points of view, too?
+
+    too_many_replies: |
+      ### You have reached the reply limit for this topic
+
+      We're sorry, but new users are temporarily limited to %{newuser_max_replies_per_topic} replies in the same topic.
+
+      Instead of adding another reply, please consider editing your previous replies, or visiting other topics.
 
   activerecord:
     attributes:
@@ -430,7 +442,7 @@ en:
     github_config_warning: 'The server is configured to allow signup and log in with GitHub (enable_github_logins), but the client id and secret values are not set. Go to <a href="/admin/site_settings">the Site Settings</a> and update the settings. <a href="https://github.com/discourse/discourse/wiki/The-Discourse-Admin-Quick-Start-Guide" target="_blank">See this guide to learn more</a>.'
     s3_config_warning: 'The server is configured to upload files to s3, but at least one the following setting is not set: s3_access_key_id, s3_secret_access_key or s3_upload_bucket. Go to <a href="/admin/site_settings">the Site Settings</a> and update the settings. <a href="http://meta.discourse.org/t/how-to-set-up-image-uploads-to-s3/7229" target="_blank">See "How to set up image uploads to S3?" to learn more</a>.'
     image_magick_warning: 'The server is configured to create thumbnails of large images, but ImageMagick is not installed. Install ImageMagick using your favorite package manager or <a href="http://www.imagemagick.org/script/binary-releases.php" target="_blank">download the latest release</a>.'
-    failing_emails_warning: 'There are %{num_failed_jobs} email jobs that failed. Check your config/environments/production.rb file and ensure that the config.action_mailer settings are correct. <a href="/sidekiq/retries" target="_blank">See the failed jobs in Sidekiq</a>.'
+    failing_emails_warning: 'There are %{num_failed_jobs} email jobs that failed. Check your config/discourse.conf file and ensure that the mail server settings are correct. <a href="/sidekiq/retries" target="_blank">See the failed jobs in Sidekiq</a>.'    
     default_logo_warning: "You haven't customized the logo images for your site. Update logo_url, logo_small_url, and favicon_url in the <a href='/admin/site_settings'>Site Settings</a>."
     contact_email_missing: "You haven't provided a contact email for your site. Please update contact_email in the <a href='/admin/site_settings'>Site Settings</a>."
     contact_email_invalid: "The site contact email is invalid. Please update contact_email in the <a href='/admin/site_settings'>Site Settings</a>."
@@ -514,7 +526,7 @@ en:
     delete_removed_posts_after: "Number of hours after which posts removed by the author will be deleted."
     max_image_width: "Maximum allowed width of images in a post"
     max_image_height: "Maximum allowed height of images in a post"
-    category_featured_topics: "Number of topics displayed per category in the /categories page"
+    category_featured_topics: "Number of topics displayed per category on the /categories page. After changing this value, it takes up to 15 minutes for the categories page to update."
     add_rel_nofollow_to_user_content: "Add rel nofollow to all submitted user content, except for internal links (including parent domains) changing this requires you update all your baked markdown with: \"rake posts:rebake\""
     exclude_rel_nofollow_domains: "A comma delimited list of domains where nofollow is not added (tld.com will automatically allow sub.tld.com as well)"
 
@@ -591,6 +603,7 @@ en:
 
     login_required: "Require authentication to read posts"
 
+    min_password_length: "Minimum password length."
     enable_local_logins: "Enable traditional, local username and password authentication"
     enable_local_account_create: "Enable creating new local accounts"
     enable_google_logins: "Enable Google authentication"
@@ -664,6 +677,7 @@ en:
     newuser_max_images: "How many images a new user can add to a post"
     newuser_max_attachments: "How many attachments a new user can add to a post"
     newuser_max_mentions_per_post: "Maximum number of @name notifications a new user can use in a post"
+    newuser_max_replies_per_topic: "Maximum number of replies a new user can make in a single topic"
     max_mentions_per_post: "Maximum number of @name notifications you can use in a post"
 
     create_thumbnails: "Create thumbnails for lightboxed images"
@@ -681,7 +695,7 @@ en:
     min_body_similar_length: "The minimum length of a post's body before it will be checked for similar topics"
 
     category_colors: "A pipe (|) separated list of hexadecimal color values allowed for categories"
-    enable_wide_category_list: "Enable traditional full width, non-tiling, category list"
+    enable_wide_category_list: "Enable traditional full width, non-tiling, category list. NOTE: this setting currently does nothing and will be removed. Wide list is the only option now."
 
     max_image_size_kb: "The maximum size of images we allow users to upload in kB - configure the limit in nginx (client_max_body_size) / apache or proxy as well."
     max_attachment_size_kb: "The maximum size of files we allow users to upload in kB - configure the limit in nginx (client_max_body_size) / apache or proxy as well."
@@ -735,6 +749,7 @@ en:
     display_name_on_posts: "Also show a user's full name on their posts"
     invites_shown: "Maximum invites shown on a user page"
     short_progress_text_threshold: "After the number of posts in a topic goes above this number, the progress bar will only show the current post number. If you change the progress bar's width, you may need to change this value."
+    default_code_lang: "Default programming language syntax highlighting applied to GitHub code blocks (lang-auto, ruby, python etc.)"
 
   notification_types:
     mentioned: "%{display_username} mentioned you in %{link}"

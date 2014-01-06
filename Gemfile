@@ -34,12 +34,12 @@ else
   puts "Booting in Rails 3 mode"
 end
 
-gem 'seed-fu' , :git => 'https://github.com/SamSaffron/seed-fu.git'
+# see: https://github.com/mbleigh/seed-fu/pull/54
+# taking forever to get changes upstream in seed-fu
+gem 'seed-fu-discourse', require: 'seed-fu'
 
 if rails4?
   gem 'rails'
-  # because of https://github.com/redis-store/redis-store/pull/183
-  gem 'redis-rails', :git => 'https://github.com/SamSaffron/redis-store.git'
   gem 'rails-observers'
   gem 'actionpack-action_caching'
 else
@@ -50,11 +50,11 @@ else
   # we are using a custom sprockets repo to work around: https://github.com/rails/rails/issues/8099#issuecomment-16137638
   # REVIEW EVERY RELEASE
   gem 'sprockets', git: 'https://github.com/SamSaffron/sprockets.git', branch: 'rails-compat'
-  gem 'redis-rails'
   gem 'activerecord-postgres-hstore'
   gem 'active_attr'
 end
 
+gem 'redis-rails'
 gem 'hiredis'
 gem 'redis', :require => ["redis", "redis/connection/hiredis"]
 
@@ -68,8 +68,6 @@ gem 'ember-rails'
 gem 'ember-source', '~> 1.2.0.1'
 gem 'handlebars-source', '~> 1.1.2'
 gem 'barber'
-
-gem 'vestal_versions', git: 'https://github.com/SamSaffron/vestal_versions'
 
 gem 'message_bus'
 gem 'rails_multisite', path: 'vendor/gems/rails_multisite'
@@ -86,7 +84,11 @@ gem 'fastimage'
 gem 'fog', '1.18.0', require: false
 gem 'unf', require: false
 
-gem 'email_reply_parser', git: 'https://github.com/lawrencepit/email_reply_parser.git'
+# see: https://twitter.com/samsaffron/status/412360162297393152
+# Massive amount of changes made in branch we use, no PR upstreamed
+# We need to get this sorted
+# https://github.com/samsaffron/email_reply_parser
+gem 'email_reply_parser-discourse', require: 'email_reply_parser'
 
 # note: for image_optim to correctly work you need
 # sudo apt-get install -y advancecomp gifsicle jpegoptim libjpeg-progs optipng pngcrush
@@ -104,7 +106,10 @@ gem 'omniauth-facebook'
 gem 'omniauth-twitter'
 gem 'omniauth-github'
 gem 'omniauth-oauth2', require: false
-gem 'omniauth-browserid', git: 'https://github.com/callahad/omniauth-browserid.git', branch: 'observer_api'
+# abandoned gem hard to tell what is going on, multiple PRs upstream being ignored:
+# https://twitter.com/samsaffron/status/412372111710109696
+# we use: gem 'omniauth-browserid', git: 'https://github.com/samsaffron/omniauth-browserid.git', branch: 'observer_api'
+gem 'omniauth-browserid-discourse', require: 'omniauth-browserid'
 gem 'omniauth-cas'
 gem 'oj'
 # while resolving https://groups.google.com/forum/#!topic/ruby-pg/5_ylGmog1S4
@@ -122,9 +127,8 @@ gem 'sinatra', require: nil
 gem 'slim'  # required for sidekiq-web
 
 # URGENT fix needed see: https://github.com/cowboyd/therubyracer/pull/280
-gem 'therubyracer', require: 'v8', git: 'https://github.com/SamSaffron/therubyracer.git'
+gem 'therubyracer-discourse', require: 'v8'
 gem 'thin', require: false
-gem 'diffy', '>= 3.0', require: false
 gem 'highline', require: false
 gem 'rack-protection' # security
 
@@ -157,7 +161,7 @@ group :test, :development do
   gem 'rspec-given'
   gem 'pry-rails'
   gem 'pry-nav'
-  gem 'spork-rails', :git => 'https://github.com/sporkrb/spork-rails.git'
+  gem 'spork-rails'
 end
 
 group :development do

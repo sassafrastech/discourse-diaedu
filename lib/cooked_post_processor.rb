@@ -98,7 +98,7 @@ class CookedPostProcessor
     absolute_url = url
     absolute_url = Discourse.base_url_no_prefix + absolute_url if absolute_url =~ /^\/[^\/]/
     # FastImage fails when there's no scheme
-    absolute_url = (SiteSetting.use_ssl? ? "https:" : "http:") + absolute_url if absolute_url.start_with?("//")
+    absolute_url = SiteSetting.scheme + ":" + absolute_url if absolute_url.start_with?("//")
     return unless is_valid_image_url?(absolute_url)
     # we can *always* crawl our own images
     return unless SiteSetting.crawl_images? || Discourse.store.has_been_uploaded?(url)
@@ -226,7 +226,7 @@ class CookedPostProcessor
     # have we enough disk space?
     return if disable_if_low_on_disk_space
     # we only want to run the job whenever it's changed by a user
-    return if @post.updated_by == Discourse.system_user
+    return if @post.last_editor_id == Discourse.system_user.id
     # make sure no other job is scheduled
     Jobs.cancel_scheduled_job(:pull_hotlinked_images, post_id: @post.id)
     # schedule the job

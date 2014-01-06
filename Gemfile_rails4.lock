@@ -1,65 +1,8 @@
 GIT
-  remote: https://github.com/SamSaffron/redis-store.git
-  revision: 1eafaa3d8bfbcb61ad89d1a2831adbba4ea8e1e1
-  specs:
-    redis-rails (3.2.3)
-      redis-actionpack (>= 3.2.3)
-      redis-activesupport (>= 3.2.3)
-      redis-store (~> 1.1.0)
-
-GIT
-  remote: https://github.com/SamSaffron/seed-fu.git
-  revision: f4ffaf31bd8861af0b7bb2a63b0fdda275d7f40d
-  specs:
-    seed-fu (2.2.0)
-      activerecord (>= 3.1, < 4.1)
-      activesupport (>= 3.1, < 4.1)
-
-GIT
-  remote: https://github.com/SamSaffron/therubyracer.git
-  revision: 885ea08cb0bbe150e53d6d59ce60ef434245e6f3
-  specs:
-    therubyracer (0.12.0)
-      libv8 (~> 3.16.14.0)
-      ref
-
-GIT
-  remote: https://github.com/SamSaffron/vestal_versions
-  revision: 007b30a5274db7db55da745a4482243559247782
-  specs:
-    vestal_versions (1.2.3)
-      activerecord (> 3.0)
-      activesupport (> 3.0)
-
-GIT
-  remote: https://github.com/callahad/omniauth-browserid.git
-  revision: af62d667626c1622de6fe13b60849c3640765ab1
-  branch: observer_api
-  specs:
-    omniauth-browserid (0.0.2)
-      faraday
-      multi_json
-      omniauth (~> 1.0)
-
-GIT
   remote: https://github.com/hooverlunch/random_data
   revision: 0496ac0cd65eec7215de5c4db375a431b9909f00
   specs:
     random_data (1.5.2)
-
-GIT
-  remote: https://github.com/lawrencepit/email_reply_parser.git
-  revision: 67408dfb1b99fb8d5f145f782b9e22d1851a8e5a
-  specs:
-    email_reply_parser (0.6)
-
-GIT
-  remote: https://github.com/sporkrb/spork-rails.git
-  revision: 0dd45e59d3237b4c8f9efc215b46d9c07072a95e
-  specs:
-    spork-rails (4.0.0)
-      rails (>= 3.0.0, < 5)
-      spork (>= 1.0rc0)
 
 PATH
   remote: plugins/diaedu
@@ -141,7 +84,7 @@ GEM
     daemons (1.1.9)
     debug_inspector (0.0.2)
     diff-lcs (1.2.4)
-    diffy (3.0.1)
+    email_reply_parser-discourse (0.6)
     ember-data-source (0.14)
       ember-source
     ember-rails (0.14.1)
@@ -266,6 +209,10 @@ GEM
     omniauth (1.1.4)
       hashie (>= 1.2, < 3)
       rack
+    omniauth-browserid-discourse (0.0.2)
+      faraday
+      multi_json
+      omniauth (~> 1.0)
     omniauth-cas (1.0.4)
       addressable (~> 2.3)
       nokogiri (~> 1.6)
@@ -357,6 +304,10 @@ GEM
     redis-rack (1.5.0)
       rack (~> 1.5)
       redis-store (~> 1.1.0)
+    redis-rails (4.0.0)
+      redis-actionpack (~> 4)
+      redis-activesupport (~> 4)
+      redis-store (~> 1.1.0)
     redis-store (1.1.4)
       redis (>= 2.2)
     ref (1.0.5)
@@ -390,6 +341,9 @@ GEM
       railties (>= 4.0.0, < 5.0)
       sass (>= 3.1.10)
       sprockets-rails (~> 2.0.0)
+    seed-fu-discourse (2.2.0)
+      activerecord (>= 3.1, < 4.1)
+      activesupport (>= 3.1, < 4.1)
     shoulda (3.5.0)
       shoulda-context (~> 1.0, >= 1.0.1)
       shoulda-matchers (>= 1.4.1, < 3.0)
@@ -422,6 +376,9 @@ GEM
     slop (3.4.7)
     sorcerer (1.0.2)
     spork (1.0.0rc4)
+    spork-rails (4.0.0)
+      rails (>= 3.0.0, < 5)
+      spork (>= 1.0rc0)
     sprockets (2.10.1)
       hike (~> 1.2)
       multi_json (~> 1.0)
@@ -432,6 +389,9 @@ GEM
       activesupport (>= 3.0)
       sprockets (~> 2.8)
     temple (0.6.7)
+    therubyracer-discourse (0.12.0)
+      libv8 (~> 3.16.14.0)
+      ref
     thin (1.6.1)
       daemons (>= 1.0.9)
       eventmachine (>= 1.0.0)
@@ -447,7 +407,7 @@ GEM
       polyglot (>= 0.3.1)
     trollop (2.0)
     tzinfo (0.3.38)
-    uglifier (2.3.1)
+    uglifier (2.3.3)
       execjs (>= 0.3.0)
       json (>= 1.8.0)
     unf (0.1.3)
@@ -471,9 +431,8 @@ DEPENDENCIES
   binding_of_caller
   certified
   diaedu!
-  diffy (>= 3.0)
   discourse_plugin!
-  email_reply_parser!
+  email_reply_parser-discourse
   ember-rails
   ember-source (~> 1.2.0.1)
   eventmachine
@@ -505,7 +464,7 @@ DEPENDENCIES
   nokogiri
   oj
   omniauth
-  omniauth-browserid!
+  omniauth-browserid-discourse
   omniauth-cas
   omniauth-facebook
   omniauth-github
@@ -531,7 +490,7 @@ DEPENDENCIES
   rbtrace
   redcarpet
   redis
-  redis-rails!
+  redis-rails
   rest-client
   rinku
   rspec-given
@@ -539,7 +498,7 @@ DEPENDENCIES
   sanitize
   sass
   sass-rails
-  seed-fu!
+  seed-fu-discourse
   shoulda
   sidekiq (= 2.15.1)
   sidekiq-failures
@@ -548,11 +507,10 @@ DEPENDENCIES
   simplecov
   sinatra
   slim
-  spork-rails!
-  therubyracer!
+  spork-rails
+  therubyracer-discourse
   thin
   timecop
   uglifier
   unf
   unicorn
-  vestal_versions!

@@ -26,8 +26,6 @@ class Topic < ActiveRecord::Base
     2**31 - 1
   end
 
-  versioned if: :new_version_required?
-
   def featured_users
     @featured_users ||= TopicFeaturedUsers.new(self)
   end
@@ -97,6 +95,9 @@ class Topic < ActiveRecord::Base
   has_many :topic_invites
   has_many :invites, through: :topic_invites, source: :invite
 
+  has_many :topic_revisions
+  has_many :revisions, foreign_key: :topic_id, class_name: 'TopicRevision'
+
   # When we want to temporarily attach some data to a forum topic (usually before serialization)
   attr_accessor :user_data
   attr_accessor :posters  # TODO: can replace with posters_summary once we remove old list code
@@ -153,35 +154,55 @@ class Topic < ActiveRecord::Base
   attr_accessor :skip_callbacks
 
   after_create do
-    return if skip_callbacks
 
-    changed_to_category(category)
-    if archetype == Archetype.private_message
-      DraftSequence.next!(user, Draft::NEW_PRIVATE_MESSAGE)
-    else
-      DraftSequence.next!(user, Draft::NEW_TOPIC)
+    unless skip_callbacks
+      changed_to_category(category)
+      if archetype == Archetype.private_message
+        DraftSequence.next!(user, Draft::NEW_PRIVATE_MESSAGE)
+      else
+        DraftSequence.next!(user, Draft::NEW_TOPIC)
+      end
     end
+
   end
 
   before_save do
-    return if skip_callbacks
 
-    if (auto_close_at_changed? and !auto_close_at_was.nil?) or (auto_close_user_id_changed? and auto_close_at)
-      self.auto_close_started_at ||= Time.zone.now if auto_close_at
-      Jobs.cancel_scheduled_job(:close_topic, {topic_id: id})
-      true
+    unless skip_callbacks
+      if (auto_close_at_changed? and !auto_close_at_was.nil?) or (auto_close_user_id_changed? and auto_close_at)
+        self.auto_close_started_at ||= Time.zone.now if auto_close_at
+        Jobs.cancel_scheduled_job(:close_topic, {topic_id: id})
+        true
+      end
+      if category_id.nil? && (archetype.nil? || archetype == Archetype.default)
+        self.category_id = SiteSetting.uncategorized_category_id
+      end
     end
-    if category_id.nil? && (archetype.nil? || archetype == Archetype.default)
-      self.category_id = SiteSetting.uncategorized_category_id
-    end
+
   end
 
   after_save do
-    return if skip_callbacks
+    save_revision if should_create_new_version?
 
-    if auto_close_at and (auto_close_at_changed? or auto_close_user_id_changed?)
-      Jobs.enqueue_at(auto_close_at, :close_topic, {topic_id: id, user_id: auto_close_user_id || user_id})
+    unless skip_callbacks
+      if auto_close_at and (auto_close_at_changed? or auto_close_user_id_changed?)
+        Jobs.enqueue_at(auto_close_at, :close_topic, {topic_id: id, user_id: auto_close_user_id || user_id})
+      end
     end
+
+  end
+
+  def save_revision
+    TopicRevision.create!(
+      user_id: acting_user.id,
+      topic_id: id,
+      number: TopicRevision.where(topic_id: id).count + 2,
+      modifications: changes.extract!(:category, :title)
+    )
+  end
+
+  def should_create_new_version?
+    !new_record? && (category_id_changed? || title_changed?)
   end
 
   def self.top_viewed(max = 10)
@@ -608,7 +629,7 @@ class Topic < ActiveRecord::Base
   end
 
   def self.auto_close
-    Topic.where("NOT closed AND auto_close_at < ? AND auto_close_user_id IS NOT NULL", 5.minutes.from_now).each do |t|
+    Topic.where("NOT closed AND auto_close_at < ? AND auto_close_user_id IS NOT NULL", 1.minute.ago).each do |t|
       t.auto_close
     end
   end
@@ -657,6 +678,14 @@ class Topic < ActiveRecord::Base
 
   def read_restricted_category?
     category && category.read_restricted
+  end
+
+  def acting_user
+    @acting_user || user
+  end
+
+  def acting_user=(u)
+    @acting_user = u
   end
 
   private
