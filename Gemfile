@@ -204,9 +204,6 @@ group :profile do
   # gem 'rack-perftools_profiler', require: 'rack/perftools_profiler', platform: :mri_19
 end
 
-# our fancy plugin!
-gem 'diaedu', path: 'plugins/diaedu'
-
 # these should be moved to diaedu eventually
 
 # foreign key management

@@ -14,8 +14,7 @@ Discourse::Application.routes.draw do
   match "/404", to: "exceptions#not_found", via: [:get, :post]
 
   mount Sidekiq::Web => '/sidekiq', constraints: AdminConstraint.new
-  mount Diaedu::Engine => '/kb'
-  
+
   resources :forums
   get 'srv/status' => 'forums#status'
 
