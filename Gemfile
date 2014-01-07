@@ -204,7 +204,8 @@ group :profile do
   # gem 'rack-perftools_profiler', require: 'rack/perftools_profiler', platform: :mri_19
 end
 
-# these should be moved to diaedu eventually
+###################################
+# diaedu plugin gems -- not sure where to put these yet
 
 # foreign key management
 gem 'foreigner'
@@ -214,4 +215,3 @@ gem 'random_data', :git => 'https://github.com/hooverlunch/random_data'
 
 # object factories
 gem "factory_girl_rails", "~> 4.0"
-
