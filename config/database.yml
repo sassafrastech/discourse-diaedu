@@ -1,9 +1,8 @@
 development:
   adapter: postgresql
-  database: discourse_dev
+  database: discourse_development
   min_messages: warning
   host: localhost
-  username: postgres
   pool: 5
   timeout: 5000
   host_names:
