@@ -67,7 +67,7 @@ module Oneboxer
 
           category = topic.category
           if category
-            category = "<a href=\"/category/#{category.slug}\" class=\"badge badge-category\" style=\"background-color: ##{category.color}\">#{category.name}</a>"
+            category = "<a href=\"/category/#{category.slug}\" class=\"badge badge-category\" style=\"background-color: ##{category.color}; color: ##{category.text_color}\">#{category.name}</a>"
           end
 
           quote = post.excerpt(SiteSetting.post_onebox_maxlength)
@@ -88,7 +88,7 @@ module Oneboxer
       end
 
       return nil unless @template
-      Mustache.render(File.read("#{Rails.root}/lib/oneboxer/templates/discourse_#{@template}_onebox.hbrs"), args)
+      Mustache.render(File.read("#{Rails.root}/lib/oneboxer/templates/discourse_#{@template}_onebox.handlebars"), args)
     rescue ActionController::RoutingError
       nil
     end

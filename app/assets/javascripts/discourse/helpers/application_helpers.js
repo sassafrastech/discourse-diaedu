@@ -4,12 +4,16 @@
   @method breakUp
   @for Handlebars
 **/
-Handlebars.registerHelper('breakUp', function(property, options) {
-  var prop, result, tokens;
-  prop = Ember.Handlebars.get(this, property, options);
+Handlebars.registerHelper('breakUp', function(property, hint, options) {
+  var prop = Ember.Handlebars.get(this, property, options);
   if (!prop) return "";
+  if (typeof(hint) === 'string') {
+    hint = Ember.Handlebars.get(this, hint, options);
+  } else {
+    hint = undefined;
+  }
 
-  return Discourse.Formatter.breakUp(prop, 13);
+  return new Handlebars.SafeString(Discourse.Formatter.breakUp(prop, hint));
 });
 
 /**
@@ -65,6 +69,10 @@ Handlebars.registerHelper('categoryLink', function(property, options) {
   return categoryLinkHTML(Ember.Handlebars.get(this, property, options), options);
 });
 
+Handlebars.registerHelper('categoryLinkRaw', function(property, options) {
+  return categoryLinkHTML(property, options);
+});
+
 /**
   Produces a bound link to a category
 
@@ -85,9 +93,9 @@ Handlebars.registerHelper('titledLinkTo', function(name, object) {
     options.hash.title = I18n.t(options.hash.titleKey);
   }
   if (arguments.length === 3) {
-    return Ember.Handlebars.helpers.linkTo.call(this, name, object, options);
+    return Ember.Handlebars.helpers['link-to'].call(this, name, object, options);
   } else {
-    return Ember.Handlebars.helpers.linkTo.call(this, name, options);
+    return Ember.Handlebars.helpers['link-to'].call(this, name, options);
   }
 });
 
@@ -192,12 +200,12 @@ Ember.Handlebars.registerBoundHelper('boundAvatar', function(user, options) {
 }, 'avatar_template', 'uploaded_avatar_template', 'gravatar_template');
 
 /**
-  Nicely format a date without a binding since the date doesn't need to change.
+  Nicely format a date without binding or returning HTML
 
-  @method unboundDate
+  @method rawDate
   @for Handlebars
 **/
-Handlebars.registerHelper('unboundDate', function(property, options) {
+Handlebars.registerHelper('rawDate', function(property, options) {
   var dt = new Date(Ember.Handlebars.get(this, property, options));
   return Discourse.Formatter.longDate(dt);
 });
@@ -205,7 +213,7 @@ Handlebars.registerHelper('unboundDate', function(property, options) {
 /**
   Live refreshing age helper
 
-  @method unboundDate
+  @method unboundAge
   @for Handlebars
 **/
 Handlebars.registerHelper('unboundAge', function(property, options) {
@@ -289,7 +297,7 @@ Handlebars.registerHelper('number', function(property, options) {
   var result = "<span class='" + classNames + "'";
 
   if (n !== title) {
-    result += " title='" + title + "'";
+    result += " title='" + Handlebars.Utils.escapeExpression(title) + "'";
   }
   result += ">" + n + "</span>";
 
@@ -297,12 +305,13 @@ Handlebars.registerHelper('number', function(property, options) {
 });
 
 /**
-  Display logic for dates.
+  Display logic for dates. It is unbound in Ember but will use jQuery to
+  update the dates on a regular interval.
 
-  @method date
+  @method unboundDate
   @for Handlebars
 **/
-Handlebars.registerHelper('date', function(property, options) {
+Handlebars.registerHelper('unboundDate', function(property, options) {
   var leaveAgo;
   if (property.hash) {
     if (property.hash.leaveAgo) {
@@ -318,7 +327,10 @@ Handlebars.registerHelper('date', function(property, options) {
     var date = new Date(val);
     return new Handlebars.SafeString(Discourse.Formatter.autoUpdatingRelativeAge(date, {format: 'medium', title: true, leaveAgo: leaveAgo}));
   }
+});
 
+Ember.Handlebars.registerBoundHelper('date', function(dt) {
+  return new Handlebars.SafeString(Discourse.Formatter.autoUpdatingRelativeAge(new Date(dt), {format: 'medium', title: true }));
 });
 
 /**
@@ -327,7 +339,7 @@ Handlebars.registerHelper('date', function(property, options) {
   @method customHTML
   @for Handlebars
 **/
-Handlebars.registerHelper('customHTML', function(property, options) {
+Handlebars.registerHelper('customHTML', function(property) {
   var html = PreloadStore.get("customHTML");
 
   if (html && html[property] && html[property].length) {

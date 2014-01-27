@@ -16,7 +16,7 @@ Discourse.Route = Em.Route.extend({
 
     @method activate
   **/
-  activate: function(router, context) {
+  activate: function() {
     this._super();
 
     // Close mini profiler
@@ -32,7 +32,7 @@ Discourse.Route = Em.Route.extend({
     Discourse.set('notifyCount',0);
 
     var hideDropDownFunction = $('html').data('hide-dropdown');
-    if (hideDropDownFunction) return hideDropDownFunction();
+    if (hideDropDownFunction) { hideDropDownFunction(); }
   }
 
 });

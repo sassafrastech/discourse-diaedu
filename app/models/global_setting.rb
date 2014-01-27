@@ -1,12 +1,32 @@
 class GlobalSetting
 
+  def self.register(key, default)
+    define_singleton_method(key) do
+      provider.lookup(key, default)
+    end
+  end
+
   def self.load_defaults
     default_provider = FileProvider.from(File.expand_path('../../../config/discourse_defaults.conf', __FILE__))
-    default_provider.data.each do |name, default|
-      define_singleton_method(name) do
-        provider.lookup(name, default)
+    default_provider.keys.concat(@provider.keys).uniq.each do |key|
+      default = default_provider.lookup(key, nil)
+      define_singleton_method(key) do
+        provider.lookup(key, default)
       end
     end
+  end
+
+  def self.database_config
+    hash = {"adapter" => "postgresql"}
+    %w{pool timeout socket host port username password}.each do |s|
+      if val = self.send("db_#{s}")
+        hash[s] = val
+      end
+    end
+    hash["host_names"] = [ hostname ]
+    hash["database"] = db_name
+
+    {"production" => hash}
   end
 
 
@@ -56,6 +76,10 @@ class GlobalSetting
       resolve(var, var.nil? ? default : "")
     end
 
+    def keys
+      @data.keys
+    end
+
 
     private
     def self.parse(file)
@@ -70,6 +94,10 @@ class GlobalSetting
       var = ENV["DISCOURSE_" << key.to_s.upcase]
       resolve(var , var.nil? ? default : nil)
     end
+
+    def keys
+      ENV.keys.select{|k| k =~ /^DISCOURSE_/}.map{|k| k[10..-1].downcase.to_sym}
+    end
   end
 
 
@@ -78,8 +106,9 @@ class GlobalSetting
   end
 
 
-  load_defaults
   @provider =
     FileProvider.from(File.expand_path('../../../config/discourse.conf', __FILE__)) ||
     EnvProvider.new
+
+  load_defaults
 end

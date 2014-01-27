@@ -43,7 +43,14 @@
     <div class="control-group">
       <label class="control-label">{{i18n user.password.title}}</label>
       <div class="controls">
-        <a href="#" {{action changePassword}} class='btn'><i class="fa fa-envelope"></i>{{i18n user.change_password.action}}</a> {{passwordProgress}}
+        <a href="#" {{action changePassword}} class='btn'><i class="fa fa-envelope"></i>
+          {{#if no_password}}
+            {{i18n user.change_password.set_password}}
+          {{else}}
+            {{i18n user.change_password.action}}
+          {{/if}}
+        </a>
+        {{passwordProgress}}
       </div>
     </div>
 
@@ -109,6 +116,15 @@
         {{combobox valueAttribute="value" content=considerNewTopicOptions value=new_topic_duration_minutes}}
       </div>
 
+      {{#if Discourse.SiteSettings.enable_watch_new_topics}}
+      <div class="controls">
+        <label>
+          {{view Ember.Checkbox checkedBinding="watch_new_topics"}}
+          {{i18n user.watch_new_topics}}
+        </label>
+      </div>
+      {{/if}}
+
       <div class="controls">
         <label>{{view Ember.Checkbox checkedBinding="external_links_in_new_tab"}}
         {{i18n user.external_links_in_new_tab}}</label>
@@ -125,9 +141,28 @@
 
     </div>
 
+    <div class="control-group category">
+      <label class="control-label">{{i18n user.categories_settings}}</label>
+      <div class="controls">
+        <label>{{i18n user.watched_categories}}</label>
+        {{category-group categories=watchedCategories}}
+      </div>
+      <div class="instructions">{{i18n user.watched_categories_instructions}}</div>
+      <div class="controls">
+        <label>{{i18n user.tracked_categories}}</label>
+        {{category-group categories=trackedCategories}}
+      </div>
+      <div class="instructions">{{i18n user.tracked_categories_instructions}}</div>
+      <div class="controls">
+        <label>{{i18n user.muted_categories}}</label>
+        {{category-group categories=mutedCategories}}
+      </div>
+      <div class="instructions">{{i18n user.muted_categories_instructions}}</div>
+    </div>
+
     <div class="control-group">
       <div class="controls">
-          <button {{action save}} {{bindAttr disabled="saveDisabled"}} class="btn btn-primary">{{saveButtonText}}</button>
+          <button {{action save}} {{bind-attr disabled="saveDisabled"}} class="btn btn-primary">{{saveButtonText}}</button>
           {{#if saved}}{{i18n saved}}{{/if}}
       </div>
     </div>

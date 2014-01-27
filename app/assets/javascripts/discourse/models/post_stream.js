@@ -251,7 +251,7 @@ Discourse.PostStream = Em.Object.extend({
       self.setProperties({ loadingFilter: false, loaded: true });
 
       Discourse.URL.set('queryParams', self.get('streamFilters'));
-    }).fail(function(result) {
+    }).catch(function(result) {
       self.errorLoading(result);
     });
   },
@@ -306,9 +306,7 @@ Discourse.PostStream = Em.Object.extend({
   fillGapAfter: function(post, gap) {
     var postId = post.get('id'),
         stream = this.get('stream'),
-        idx = stream.indexOf(postId),
-        currentPosts = this.get('posts'),
-        self = this;
+        idx = stream.indexOf(postId);
 
     if (idx !== -1) {
       stream.pushObjects(gap);
@@ -349,7 +347,7 @@ Discourse.PostStream = Em.Object.extend({
   /**
     Prepend the previous window of posts to the stream. Call it when scrolling upwards.
 
-    @method appendMore
+    @method prependMore
     @returns {Ember.Deferred} a promise that's resolved when the posts have been added.
   **/
   prependMore: function() {
@@ -674,8 +672,7 @@ Discourse.PostStream = Em.Object.extend({
 
     var url = "/t/" + this.get('topic.id') + "/posts.json",
         data = { post_ids: postIds },
-        postStream = this,
-        result = Em.A();
+        postStream = this;
 
     return Discourse.ajax(url, {data: data}).then(function(result) {
       var posts = Em.get(result, "post_stream.posts");

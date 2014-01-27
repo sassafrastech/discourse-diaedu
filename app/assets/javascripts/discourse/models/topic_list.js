@@ -32,7 +32,6 @@ function finderFor(filter, params) {
 }
 
 Discourse.TopicList = Discourse.Model.extend({
-
   forEachNew: function(topics, callback) {
     var topicIds = [];
     _.each(this.get('topics'),function(topic) {
@@ -78,7 +77,7 @@ Discourse.TopicList = Discourse.Model.extend({
   }.observes('sortOrder.order', 'sortOrder.descending'),
 
   loadMore: function() {
-    if (this.get('loadingMore')) { return Ember.RSVP.reject(); }
+    if (this.get('loadingMore')) { return Ember.RSVP.resolve(); }
 
     var moreUrl = this.get('more_topics_url');
     if (moreUrl) {
@@ -105,7 +104,7 @@ Discourse.TopicList = Discourse.Model.extend({
       });
     } else {
       // Return a promise indicating no more results
-      return Ember.RSVP.reject();
+      return Ember.RSVP.resolve();
     }
   },
 
@@ -169,8 +168,7 @@ Discourse.TopicList.reopenClass({
   topicsFrom: function(result) {
     // Stitch together our side loaded data
     var categories = Discourse.Category.list(),
-        users = this.extractByKey(result.users, Discourse.User),
-        topics = Em.A();
+        users = this.extractByKey(result.users, Discourse.User);
 
     return result.topic_list.topics.map(function (t) {
       t.category = categories.findBy('id', t.category_id);
@@ -181,6 +179,27 @@ Discourse.TopicList.reopenClass({
     });
   },
 
+  from: function(result, filter, params) {
+    var topicList = Discourse.TopicList.create({
+      inserted: Em.A(),
+      filter: filter,
+      params: params || {},
+      topics: Discourse.TopicList.topicsFrom(result),
+      can_create_topic: result.topic_list.can_create_topic,
+      more_topics_url: result.topic_list.more_topics_url,
+      draft_key: result.topic_list.draft_key,
+      draft_sequence: result.topic_list.draft_sequence,
+      draft: result.topic_list.draft,
+      loaded: true
+    });
+
+    if (result.topic_list.filtered_category) {
+      topicList.set('category', Discourse.Category.create(result.topic_list.filtered_category));
+    }
+
+    return topicList;
+  },
+
   /**
     Lists topics on a given menu item
 
@@ -189,9 +208,8 @@ Discourse.TopicList.reopenClass({
     @param {Object} Any additional params
     @returns {Promise} a promise that resolves to the list of topics
   **/
-  list: function(menuItem, params) {
-    var filter = menuItem.get('name'),
-        session = Discourse.Session.current(),
+  list: function(filter, params) {
+    var session = Discourse.Session.current(),
         list = session.get('topicList');
 
     if (list && (list.get('filter') === filter) && window.location.pathname.indexOf('more') > 0) {
@@ -200,30 +218,22 @@ Discourse.TopicList.reopenClass({
     }
     session.setProperties({topicList: null, topicListScrollPos: null});
 
-    var findParams = {exclude_category: menuItem.get('excludeCategory')};
+    var findParams = {};
+    Discourse.SiteSettings.top_menu.split('|').forEach(function (i) {
+      if (i.indexOf(filter) === 0) {
+        var exclude = i.split("-");
+        if (exclude && exclude.length === 2) {
+          findParams.exclude_category = exclude[1];
+        }
+      }
+    });
+
     return Discourse.TopicList.find(filter, _.extend(findParams, params || {}));
   },
 
   find: function(filter, params) {
     return PreloadStore.getAndRemove("topic_list", finderFor(filter, params)).then(function(result) {
-      var topicList = Discourse.TopicList.create({
-        inserted: Em.A(),
-        filter: filter,
-        params: params || {},
-        topics: Discourse.TopicList.topicsFrom(result),
-        can_create_topic: result.topic_list.can_create_topic,
-        more_topics_url: result.topic_list.more_topics_url,
-        draft_key: result.topic_list.draft_key,
-        draft_sequence: result.topic_list.draft_sequence,
-        draft: result.topic_list.draft,
-        canViewRankDetails: result.topic_list.can_view_rank_details,
-        loaded: true
-      });
-
-      if (result.topic_list.filtered_category) {
-        topicList.set('category', Discourse.Category.create(result.topic_list.filtered_category));
-      }
-      return topicList;
+      return Discourse.TopicList.from(result, filter, params);
     });
   }
 

@@ -51,7 +51,9 @@ class Post < ActiveRecord::Base
   scope :public_posts, -> { joins(:topic).where('topics.archetype <> ?', Archetype.private_message) }
   scope :private_posts, -> { joins(:topic).where('topics.archetype = ?', Archetype.private_message) }
   scope :with_topic_subtype, ->(subtype) { joins(:topic).where('topics.subtype = ?', subtype) }
-
+  
+  delegate :username, to: :user
+  
   def self.hidden_reasons
     @hidden_reasons ||= Enum.new(:flag_threshold_reached, :flag_threshold_reached_again, :new_user_spam_threshold_reached)
   end
@@ -60,11 +62,12 @@ class Post < ActiveRecord::Base
     @types ||= Enum.new(:regular, :moderator_action)
   end
 
+  def self.cook_methods
+    @cook_methods ||= Enum.new(:regular, :raw_html)
+  end
+
   def self.find_by_detail(key, value)
-    includes(:post_details).where( "post_details.key = ? AND " +
-                                   "post_details.value = ?",
-                                   key,
-                                   value ).first
+    includes(:post_details).where(post_details: { key: key, value: value }).first
   end
 
   def add_detail(key, value, extra = nil)
@@ -127,7 +130,21 @@ class Post < ActiveRecord::Base
   end
 
   def cook(*args)
-    Plugin::Filter.apply(:after_post_cook, self, post_analyzer.cook(*args))
+    # For some posts, for example those imported via RSS, we support raw HTML. In that
+    # case we can skip the rendering pipeline.
+    return raw if cook_method == Post.cook_methods[:raw_html]
+
+    # Default is to cook posts
+    cooked = if !self.user || !self.user.has_trust_level?(:leader)
+      post_analyzer.cook(*args)
+    else
+      # At trust level 3, we don't apply nofollow to links
+      cloned = args.dup
+      cloned[1] ||= {}
+      cloned[1][:omit_nofollow] = true
+      post_analyzer.cook(*cloned)
+    end
+    Plugin::Filter.apply( :after_post_cook, self, cooked )
   end
 
   # Sometimes the post is being edited by someone else, for example, a mod.
@@ -200,16 +217,19 @@ class Post < ActiveRecord::Base
     cooked
   end
 
-  def username
-    user.username
-  end
-
   def external_id
     "#{topic_id}/#{post_number}"
   end
 
   def quoteless?
     (quote_count == 0) && (reply_to_post_number.present?)
+  end
+
+  def reply_to_post
+    return if reply_to_post_number.blank?
+    @reply_to_post ||= Post.where("topic_id = :topic_id AND post_number = :post_number",
+                                  topic_id: topic_id,
+                                  post_number: reply_to_post_number).first
   end
 
   def reply_notification_target
@@ -397,6 +417,14 @@ class Post < ActiveRecord::Base
     post_revision.modifications.each do |attribute, change|
       attribute = "version" if attribute == "cached_version"
       write_attribute(attribute, change[0])
+    end
+  end
+
+  def edit_time_limit_expired?
+    if created_at && SiteSetting.post_edit_time_limit.to_i > 0
+      created_at < SiteSetting.post_edit_time_limit.to_i.minutes.ago
+    else
+      false
     end
   end
 

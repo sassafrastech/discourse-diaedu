@@ -1,4 +1,4 @@
-/*global Markdown:true assetPath:true */
+/*global assetPath:true */
 
 /**
   This view handles rendering of the composer
@@ -88,7 +88,7 @@ Discourse.ComposerView = Discourse.View.extend(Ember.Evented, {
     });
   }.observes('model.composeState'),
 
-  keyUp: function(e) {
+  keyUp: function() {
     var controller = this.get('controller');
     controller.checkReplyLength();
 
@@ -107,9 +107,14 @@ Discourse.ComposerView = Discourse.View.extend(Ember.Evented, {
   },
 
   keyDown: function(e) {
-    // If the user hit ESC
     if (e.which === 27) {
+      // ESC
       this.get('controller').hitEsc();
+      return false;
+    } else if (e.which === 13 && (e.ctrlKey || e.metaKey)) {
+      // CTRL+ENTER or CMD+ENTER
+      this.get('controller').send('save');
+      return false;
     }
   },
 
@@ -121,9 +126,15 @@ Discourse.ComposerView = Discourse.View.extend(Ember.Evented, {
   },
 
   ensureMaximumDimensionForImagesInPreview: function() {
-    $('<style>#wmd-preview img, .cooked img {' +
-      'max-width:' + Discourse.SiteSettings.max_image_width + 'px!important;' +
-      'max-height:' + Discourse.SiteSettings.max_image_height + 'px!important;' +
+    // This enforce maximum dimensions of images in the preview according
+    // to the current site settings.
+    // For interactivity, we immediately insert the locally cooked version
+    // of the post into the stream when the user hits reply. We therefore also
+    // need to enforce these rules on the .cooked version.
+    // Meanwhile, the server is busy post-processing the post and generating thumbnails.
+    $('<style>#wmd-preview img:not(.thumbnail), .cooked img:not(.thumbnail) {' +
+      'max-width:' + Discourse.SiteSettings.max_image_width + 'px;' +
+      'max-height:' + Discourse.SiteSettings.max_image_height + 'px;' +
       '}</style>'
      ).appendTo('head');
   },
@@ -177,11 +188,18 @@ Discourse.ComposerView = Discourse.View.extend(Ember.Evented, {
       dataSource: function(term) {
         return Discourse.UserSearch.search({
           term: term,
-          topicId: composerView.get('controller.controllers.topic.model.id')
+          topicId: composerView.get('controller.controllers.topic.model.id'),
+          include_groups: true
         });
       },
       key: "@",
-      transformComplete: function(v) { return v.username; }
+      transformComplete: function(v) {
+          if (v.username) {
+            return v.username;
+          } else {
+            return v.usernames.join(", @");
+          }
+        }
     });
 
     this.editor = editor = Discourse.Markdown.createEditor({
@@ -327,16 +345,17 @@ Discourse.ComposerView = Discourse.View.extend(Ember.Evented, {
   imageSizes: function() {
     var result = {};
     $('#wmd-preview img').each(function(i, e) {
-      var $img = $(e);
-      result[$img.prop('src')] = {
-        width: $img.width(),
-        height: $img.height()
-      };
+      var $img = $(e),
+          src = $img.prop('src');
+
+      if (src && src.length) {
+        result[src] = { width: $img.width(), height: $img.height() };
+      }
     });
     return result;
   },
 
-  childDidInsertElement: function(e) {
+  childDidInsertElement: function() {
     return this.initEditor();
   },
 

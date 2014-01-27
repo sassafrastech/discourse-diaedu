@@ -9,14 +9,17 @@ Discourse.Lightbox = {
   apply: function($elem) {
     $LAB.script("/javascripts/jquery.magnific-popup-min.js").wait(function() {
       $("a.lightbox", $elem).each(function(i, e) {
-        $(e).magnificPopup({
+        var $e = $(e);
+        // do not lightbox spoiled images
+        if ($e.parents(".spoiler").length > 0 || $e.parents(".spoiled").length > 0) { return; }
+
+        $e.magnificPopup({
           type: "image",
           closeOnContentClick: false,
 
           callbacks: {
             open: function() {
-              var self = this,
-                  wrap = this.wrap,
+              var wrap = this.wrap,
                   img = this.currItem.img,
                   maxHeight = img.css("max-height");
 

@@ -1,5 +1,3 @@
-/*global sanitizeHtml:true */
-
 module("Discourse.Markdown", {
   setup: function() {
     Discourse.SiteSettings.traditional_markdown_linebreaks = false;
@@ -173,7 +171,7 @@ test("Quotes", function() {
                 "handles quotes properly");
 
   cookedOptions("1[quote=\"bob, post:1\"]my quote[/quote]2",
-                { topicId: 2, lookupAvatar: function(name) { } },
+                { topicId: 2, lookupAvatar: function() { } },
                 "<p>1</p>\n\n<p><aside class=\"quote\" data-post=\"1\"><div class=\"title\"><div class=\"quote-controls\"></div>bob said:" +
                 "</div><blockquote><p>my quote</p></blockquote></aside></p>\n\n<p>2</p>",
                 "includes no avatar if none is found");
@@ -323,6 +321,9 @@ test("Code Blocks", function() {
          "<p><pre><code class=\"lang-auto\">[quote=&quot;sam, post:1, topic:9441, full:true&quot;]This is &#x60;&lt;not&gt;&#x60; a bug.[/quote]</code></pre></p>",
          "it allows code with backticks in it");
 
+  cooked("    hello\n<blockquote>test</blockquote>",
+         "<pre><code>hello</code></pre>\n\n<blockquote>test</blockquote>",
+         "it allows an indented code block to by followed by a `<blockquote>`");
 });
 
 test("sanitize", function() {

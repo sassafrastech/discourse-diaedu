@@ -1,6 +1,5 @@
 require File.expand_path('../boot', __FILE__)
 require 'rails/all'
-require 'redis-store' # HACK
 
 # Plugin related stuff
 require_relative '../lib/discourse_plugin_registry'
@@ -9,10 +8,21 @@ require_relative '../lib/discourse_plugin_registry'
 require_relative '../app/models/global_setting'
 
 if defined?(Bundler)
-  # If you precompile assets before deploying to production, use this line
   Bundler.require(*Rails.groups(assets: %w(development test profile)))
-  # If you want your assets lazily compiled in production, use this line
-  # Bundler.require(:default, :assets, Rails.env)
+end
+
+# PATCH DB configuration
+class Rails::Application::Configuration
+
+  def database_configuration_with_global_config
+    if Rails.env == "production"
+      GlobalSetting.database_config
+    else
+      database_configuration_without_global_config
+    end
+  end
+
+  alias_method_chain :database_configuration, :global_config
 end
 
 module Discourse
@@ -58,7 +68,7 @@ module Discourse
       path =~ /assets\/images/ && !%w(.js .css).include?(File.extname(filename))
     end]
 
-    config.assets.precompile += ['common.css', 'desktop.css', 'mobile.css', 'admin.js', 'admin.css', 'shiny/shiny.css', 'preload_store.js', 'browser-update.js']
+    config.assets.precompile += ['vendor.js', 'common.css', 'desktop.css', 'mobile.css', 'admin.js', 'admin.css', 'shiny/shiny.css', 'preload_store.js', 'browser-update.js', 'embed.css']
 
     # Precompile all defer
     Dir.glob("#{config.root}/app/assets/javascripts/defer/*.js").each do |file|
@@ -89,7 +99,15 @@ module Discourse
     config.encoding = 'utf-8'
 
     # Configure sensitive parameters which will be filtered from the log file.
-    config.filter_parameters += [:password]
+    config.filter_parameters += [
+        :password,
+        :pop3s_polling_password,
+        :s3_secret_access_key,
+        :twitter_consumer_secret,
+        :facebook_app_secret,
+        :github_client_secret,
+        :discourse_org_access_key,
+    ]
 
     # Enable the asset pipeline
     config.assets.enabled = true
@@ -152,7 +170,9 @@ module Discourse
     # This is not really required per-se, but we do not want to support
     # XML params, we see errors in our logs about malformed XML and there
     # absolutly no spot in our app were we use XML as opposed to JSON endpoints
-    ActionDispatch::ParamsParser::DEFAULT_PARSERS.delete(Mime::XML)
+    #
+    # Rails 4 no longer includes this by default
+    ActionDispatch::ParamsParser::DEFAULT_PARSERS.delete(Mime::XML) unless rails4?
 
     if ENV['RBTRACE'] == "1"
       require 'rbtrace'

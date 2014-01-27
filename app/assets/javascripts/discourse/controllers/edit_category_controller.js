@@ -53,7 +53,7 @@ Discourse.EditCategoryController = Discourse.ObjectController.extend(Discourse.M
   }.property('saving', 'name', 'color', 'deleting'),
 
   deleteVisible: function() {
-    return (this.get('id') && this.get('topic_count') === 0);
+    return (this.get('id') && this.get('topic_count') === 0 && !this.get("isUncategorizedCategory"));
   }.property('id', 'topic_count'),
 
   deleteDisabled: function() {
@@ -155,7 +155,7 @@ Discourse.EditCategoryController = Discourse.ObjectController.extend(Discourse.M
         model.setProperties({slug: result.category.slug, id: result.category.id });
         Discourse.URL.redirectTo("/category/" + Discourse.Category.slugFor(model));
 
-      }).fail(function(error) {
+      }).catch(function(error) {
         if (error && error.responseText) {
           self.flash($.parseJSON(error.responseText).errors[0]);
         } else {

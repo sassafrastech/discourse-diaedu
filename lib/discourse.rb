@@ -30,15 +30,47 @@ module Discourse
   # Cross site request forgery
   class CSRF < Exception; end
 
+  def self.filters
+    @filters ||= [:latest, :unread, :new, :starred, :read, :posted]
+  end
+
+  def self.anonymous_filters
+    @anonymous_filters ||= [:latest]
+  end
+
+  def self.logged_in_filters
+    @logged_in_filters ||= Discourse.filters - Discourse.anonymous_filters
+  end
+
+  def self.top_menu_items
+    @top_menu_items ||= Discourse.filters + [:category, :categories, :top]
+  end
+
+  def self.anonymous_top_menu_items
+    @anonymous_top_menu_items ||= Discourse.anonymous_filters + [:category, :categories, :top]
+  end
+
   def self.activate_plugins!
     @plugins = Plugin::Instance.find_all("#{Rails.root}/plugins")
-    @plugins.each do |plugin|
-      plugin.activate!
-    end
+    @plugins.each { |plugin| plugin.activate! }
   end
 
   def self.plugins
     @plugins
+  end
+
+  def self.assets_digest
+    @assets_digest ||= begin
+      digest = Digest::MD5.hexdigest(ActionView::Base.assets_manifest.assets.values.sort.join)
+
+      channel = "/global/asset-version"
+      message = MessageBus.last_message(channel)
+
+      unless message && message.data == digest
+        MessageBus.publish channel, digest
+      end
+      digest
+    end
   end
 
   def self.authenticators
@@ -89,7 +121,7 @@ module Discourse
     default_port = 80
     protocol = "http"
 
-    if SiteSetting.use_ssl?
+    if SiteSetting.use_https?
       protocol = "https"
       default_port = 443
     end
@@ -136,7 +168,7 @@ module Discourse
 
   # Either returns the site_contact_username user or the first admin.
   def self.site_contact_user
-    user = User.where(username_lower: SiteSetting.site_contact_username).first if SiteSetting.site_contact_username.present?
+    user = User.where(username_lower: SiteSetting.site_contact_username.downcase).first if SiteSetting.site_contact_username.present?
     user ||= User.admins.real.order(:id).first
   end
 

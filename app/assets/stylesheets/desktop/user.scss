@@ -3,6 +3,19 @@
 @import "common/foundation/mixins";
 
 .user-preferences {
+  input.category-group {
+    width: 500px;
+  }
+
+  .autocomplete .badge-category {
+    margin: 2px;
+    font-weight: normal;
+  }
+
+  .autocomplete .badge-category.selected {
+    font-weight: bold;
+  }
+
   textarea {
     width: 530px;
     height: 100px;
@@ -30,8 +43,9 @@
   }
   .instructions {
     color: $dark_gray;
-    margin-left: 165px;
+    margin-left: 160px;
     margin-top: 5px;
+    margin-bottom: 10px;
   }
   .avatar {
     margin-left: 3px;
