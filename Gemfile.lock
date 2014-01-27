@@ -56,12 +56,6 @@ GIT
     email_reply_parser (0.6)
 
 PATH
-  remote: vendor/gems/diaedu
-  specs:
-    diaedu (0.0.1)
-      jquery-rails
-
-PATH
   remote: vendor/gems/discourse_plugin
   specs:
     discourse_plugin (0.0.1)
@@ -481,7 +475,6 @@ DEPENDENCIES
   better_errors
   binding_of_caller
   certified
-  diaedu!
   diffy (>= 3.0)
   discourse_plugin!
   email_reply_parser!
