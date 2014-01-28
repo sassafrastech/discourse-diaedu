@@ -228,3 +228,5 @@ gem 'random_data', :git => 'https://github.com/hooverlunch/random_data'
 
 # object factories
 gem "factory_girl_rails", "~> 4.0"
+
+gem 'activeadmin', github: 'gregbell/active_admin'
