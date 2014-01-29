@@ -271,6 +271,8 @@ class ApplicationController < ActionController::Base
     end
 
     def check_xhr
+      return if self.class.name.split('::').first == 'KbAdmin'
+
       # bypass xhr check on PUT / POST / DELETE provided api key is there, otherwise calling api is annoying
       return if !request.get? && api_key_valid?
       raise RenderEmpty.new unless ((request.format && request.format.json?) || request.xhr?)
