@@ -229,4 +229,12 @@ gem 'random_data', :git => 'https://github.com/hooverlunch/random_data'
 # object factories
 gem "factory_girl_rails", "~> 4.0"
 
+# this gem is a dependency of activeadmin and I forked it because there is a chunk where
+# it tries to guess a class name based on a controller name, and active admin has a controller named
+# 'BaseController', so it guesses 'Base', which causes all hell to break loose because there are so many Base's in this project
+# so I added some checks in inherited_resources to stop it from trying to find 'Base'
+# posted an issue on activeadmin github but no responses yet.
+# not sure what the long term solution is but this works for now.
+gem 'inherited_resources', github: 'hooverlunch/inherited_resources'
+
 gem 'activeadmin', github: 'gregbell/active_admin'
