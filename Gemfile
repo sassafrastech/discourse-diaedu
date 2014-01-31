@@ -235,6 +235,6 @@ gem "factory_girl_rails", "~> 4.0"
 # so I added some checks in inherited_resources to stop it from trying to find 'Base'
 # posted an issue on activeadmin github but no responses yet.
 # not sure what the long term solution is but this works for now.
-gem 'inherited_resources', github: 'hooverlunch/inherited_resources'
+gem 'inherited_resources', :git => 'https://github.com/hooverlunch/inherited_resources'
 
-gem 'activeadmin', github: 'gregbell/active_admin'
+gem 'activeadmin', :git => 'https://github.com/gregbell/active_admin'

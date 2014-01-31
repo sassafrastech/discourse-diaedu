@@ -1,6 +1,6 @@
 GIT
-  remote: git://github.com/gregbell/active_admin.git
-  revision: 159c8cc631f74b8db1717d66b0e33ee635ef9693
+  remote: https://github.com/gregbell/active_admin
+  revision: bae6cec4c38ac43deff4476b128796ecfad5741b
   specs:
     activeadmin (1.0.0.pre)
       arbre (~> 1.0)
@@ -17,7 +17,7 @@ GIT
       sass-rails
 
 GIT
-  remote: git://github.com/hooverlunch/inherited_resources.git
+  remote: https://github.com/hooverlunch/inherited_resources
   revision: c95c5376316fea4b5e454ac4a4edd627bcf7587a
   specs:
     inherited_resources (1.4.1)
@@ -106,7 +106,7 @@ GEM
     coffee-script (2.2.0)
       coffee-script-source
       execjs
-    coffee-script-source (1.6.3)
+    coffee-script-source (1.7.0)
     connection_pool (1.2.0)
     daemons (1.1.9)
     debug_inspector (0.0.2)
