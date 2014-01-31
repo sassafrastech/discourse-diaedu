@@ -282,6 +282,10 @@ class ApplicationController < ActionController::Base
       raise Discourse::NotLoggedIn.new unless current_user.present?
     end
 
+    def ensure_admin_logged_in
+      raise Discourse::NotLoggedIn.new unless current_user.try(:admin?)
+    end
+
     def redirect_to_login_if_required
       return if current_user || (request.format.json? && api_key_valid?)
 
