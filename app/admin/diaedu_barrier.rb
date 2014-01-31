@@ -30,6 +30,6 @@ ActiveAdmin.register Diaedu::Barrier, :as => 'Barrier' do
     f.actions
   end
 
-  permit_params :name, :description, :approved, :child_ids => []
+  permit_params :name, :description, :approved, :child_ids => [], :tag_ids => []
 
 end

@@ -29,6 +29,6 @@ ActiveAdmin.register Diaedu::Goal, :as => 'Goal' do
     f.actions
   end
 
-  permit_params :name, :description, :approved
+  permit_params :name, :description, :approved, :tag_ids => []
 
 end

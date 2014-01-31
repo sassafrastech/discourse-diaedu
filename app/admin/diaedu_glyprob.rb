@@ -41,6 +41,6 @@ ActiveAdmin.register Diaedu::Glyprob, :as => 'Glycemic Problem' do
     f.actions
   end
 
-  permit_params :name, :description, :approved, :evaluation, :event_id, :child_ids => []
+  permit_params :name, :description, :approved, :evaluation, :event_id, :child_ids => [], :tag_ids => []
 
 end
