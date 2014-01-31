@@ -15,3 +15,13 @@
 // For example, to change the default status-tag color:
 //
 //   .status_tag { background: #6090DB; }
+
+
+/* custom overrides */
+
+#active_admin_content {
+  /* multiselects should be taller */
+  fieldset.inputs li.select.input select[multiple=multiple] {
+    height: 300px;
+  }
+}
