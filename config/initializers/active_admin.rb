@@ -96,14 +96,16 @@ ActiveAdmin.setup do |config|
   #
   # Default:
 
-  # setting this to dummy value for now
-  config.logout_link_path = 'foo'
+  # this is not actually the logout link, just brings users back to home page and they can logout from there
+  config.logout_link_path = '/kb'
 
   # This setting changes the http method used when rendering the
   # link. For example :get, :delete, :put, etc..
   #
   # Default:
-  config.logout_link_method = :delete
+
+  # this needs to be :get since not a real logout
+  config.logout_link_method = :get
 
 
   # == Root
