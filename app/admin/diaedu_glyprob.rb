@@ -34,7 +34,7 @@ ActiveAdmin.register Diaedu::Glyprob, :as => 'Glycemic Problem' do
       f.input :evaluation, :as => :select, :collection => Diaedu::Eval.all
       f.input :event
       f.input :description
-      f.input :children, :label => 'Associated Triggers', :collection => Diaedu::Trigger.all, :as => :select2
+      f.input :children, :label => 'Associated Triggers', :collection => Diaedu::Trigger.default_order.all, :as => :select2
       f.input :tags, :as => :select2
       f.input :approved
     end

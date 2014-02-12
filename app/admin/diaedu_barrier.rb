@@ -23,7 +23,7 @@ ActiveAdmin.register Diaedu::Barrier, :as => 'Barrier' do
     f.inputs do
       f.input :name
       f.input :description
-      f.input :children, :label => 'Associated Goals', :collection => Diaedu::Goal.all, :as => :select2
+      f.input :children, :label => 'Associated Goals', :collection => Diaedu::Goal.default_order.all, :as => :select2
       f.input :tags, :as => :select2
       f.input :approved
     end
