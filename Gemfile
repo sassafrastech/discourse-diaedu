@@ -238,3 +238,6 @@ gem "factory_girl_rails", "~> 4.0"
 gem 'inherited_resources', :git => 'https://github.com/hooverlunch/inherited_resources'
 
 gem 'activeadmin', :git => 'https://github.com/gregbell/active_admin'
+
+# for activeadmin multiselects
+gem 'select2-rails'
