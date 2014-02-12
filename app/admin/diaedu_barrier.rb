@@ -1,5 +1,7 @@
 ActiveAdmin.register Diaedu::Barrier, :as => 'Barrier' do
 
+  actions :all, :except => [:show]
+
   menu :priority => 12
 
   config.sort_order = "name_asc"

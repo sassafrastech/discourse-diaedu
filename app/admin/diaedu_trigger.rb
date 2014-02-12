@@ -1,5 +1,7 @@
 ActiveAdmin.register Diaedu::Trigger, :as => 'Trigger' do
 
+  actions :all, :except => [:show]
+
   menu :priority => 11
 
   config.sort_order = "name_asc"

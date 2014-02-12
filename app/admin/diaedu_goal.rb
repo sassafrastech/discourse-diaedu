@@ -1,5 +1,7 @@
 ActiveAdmin.register Diaedu::Goal, :as => 'Goal' do
 
+  actions :all, :except => [:show]
+
   menu :priority => 13
 
   config.sort_order = "name_asc"
