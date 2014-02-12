@@ -18,9 +18,16 @@ module Formtastic
           # this will result in a regular multiselect, which will then get wrapped with select2
           options.delete(:as)
 
+          # remove the placeholder option as we're consuming it here
+          placeholder = options.delete(:placeholder)
+
           # add a document.ready to setup select2 for this select
           builder.input(method, options) << template.javascript_tag("
-            $(document).ready(function(){ $('select[data-select2-id=#{uid}]').select2(); });
+            $(document).ready(function(){
+              $('select[data-select2-id=#{uid}]').select2({
+                placeholder: #{placeholder.to_json}
+              });
+            });
           ")
 
         end
