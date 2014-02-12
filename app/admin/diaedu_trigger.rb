@@ -27,7 +27,7 @@ ActiveAdmin.register Diaedu::Trigger, :as => 'Trigger' do
       f.input :description
       f.input :children, :label => 'Associated Barriers', :collection => Diaedu::Barrier.default_order.all,
         :as => :select2, :placeholder => 'Enter a Barrier'
-      f.input :tags, :as => :select2, :placeholder => 'Enter a Tag'
+      f.input :tags, :collection => Diaedu::Tag.default_order.all, :as => :select2, :placeholder => 'Enter a Tag'
       f.input :approved
     end
     f.actions

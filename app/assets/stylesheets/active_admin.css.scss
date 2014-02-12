@@ -29,11 +29,13 @@
   }
 }
 
+div.select2-container {
+  width: 700px;
+}
+
 #glycemic_problem_children_input, #trigger_children_input, #barrier_children_input {
 
   div.select2-container {
-
-    width: 700px;
 
     ul.select2-choices {
 
