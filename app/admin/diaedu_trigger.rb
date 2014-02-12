@@ -23,8 +23,8 @@ ActiveAdmin.register Diaedu::Trigger, :as => 'Trigger' do
     f.inputs do
       f.input :name
       f.input :description
-      f.input :children, :label => 'Associated Barriers', :collection => Diaedu::Barrier.all
-      f.input :tags
+      f.input :children, :label => 'Associated Barriers', :collection => Diaedu::Barrier.all, :as => :select2
+      f.input :tags, :as => :select2
       f.input :approved
     end
     f.actions

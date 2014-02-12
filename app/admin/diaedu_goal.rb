@@ -23,7 +23,7 @@ ActiveAdmin.register Diaedu::Goal, :as => 'Goal' do
     f.inputs do
       f.input :name
       f.input :description
-      f.input :tags
+      f.input :tags, :as => :select2
       f.input :approved
     end
     f.actions
