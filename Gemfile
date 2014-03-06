@@ -241,3 +241,6 @@ gem 'activeadmin', :git => 'https://github.com/gregbell/active_admin'
 
 # for activeadmin multiselects
 gem 'select2-rails'
+
+# attachments
+gem 'paperclip'
