@@ -94,3 +94,6 @@ config/version.rb
 bundler_stubs/*
 
 vendor/bundle/*
+
+# uploads from diaedu
+public/system
