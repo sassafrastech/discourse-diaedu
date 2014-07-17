@@ -19,22 +19,6 @@ Discourse.Topic = Discourse.Model.extend({
   invisible: Em.computed.not('visible'),
   deleted: Em.computed.notEmpty('deleted_at'),
 
-  canConvertToRegular: function() {
-    var a = this.get('archetype');
-    return a !== 'regular' && a !== 'private_message';
-  }.property('archetype'),
-
-  convertArchetype: function() {
-    var a = this.get('archetype');
-    if (a !== 'regular' && a !== 'private_message') {
-      this.set('archetype', 'regular');
-      return Discourse.ajax(this.get('url'), {
-        type: 'PUT',
-        data: {archetype: 'regular'}
-      });
-    }
-  },
-
   searchContext: function() {
     return ({ type: 'topic', id: this.get('id') });
   }.property('id'),
@@ -52,6 +36,10 @@ Discourse.Topic = Discourse.Model.extend({
     return null;
   }.property('category_id', 'categoryName'),
 
+  categoryClass: function() {
+    return 'category-' + Discourse.Category.slugFor(this.get('category'));
+  }.property('category'),
+
   shareUrl: function(){
     var user = Discourse.User.current();
     return this.get('url') + (user ? '?u=' + user.get('username_lower') : '');
@@ -68,7 +56,7 @@ Discourse.Topic = Discourse.Model.extend({
   // Helper to build a Url with a post number
   urlForPostNumber: function(postNumber) {
     var url = this.get('url');
-    if (postNumber && (postNumber > 1)) {
+    if (postNumber && (postNumber > 0)) {
       url += "/" + postNumber;
     }
     return url;
@@ -86,6 +74,10 @@ Discourse.Topic = Discourse.Model.extend({
   lastPostUrl: function() {
     return this.urlForPostNumber(this.get('highest_post_number'));
   }.property('url', 'highest_post_number'),
+
+  firstPostUrl: function () {
+    return this.urlForPostNumber(1);
+  }.property('url'),
 
   lastPosterUrl: function() {
     return Discourse.getURL("/users/") + this.get("last_poster.username");
@@ -110,25 +102,6 @@ Discourse.Topic = Discourse.Model.extend({
     return this.get('new_posts');
   }.property('new_posts', 'id'),
 
-  // The coldmap class for the age of the topic
-  ageCold: function() {
-    var createdAt, daysSinceEpoch, lastPost, lastPostDays, nowDays;
-    if (!(createdAt = this.get('created_at'))) return;
-    if (!(lastPost = this.get('last_posted_at'))) lastPost = createdAt;
-    daysSinceEpoch = function(dt) {
-      // 1000 * 60 * 60 * 24 = days since epoch
-      return dt.getTime() / 86400000;
-    };
-
-    // Show heat on age
-    nowDays = daysSinceEpoch(new Date());
-    lastPostDays = daysSinceEpoch(new Date(lastPost));
-    if (nowDays - lastPostDays > 60) return 'coldmap-high';
-    if (nowDays - lastPostDays > 30) return 'coldmap-med';
-    if (nowDays - lastPostDays > 14) return 'coldmap-low';
-    return null;
-  }.property('age', 'created_at', 'last_posted_at'),
-
   viewsHeat: function() {
     var v = this.get('views');
     if( v >= Discourse.SiteSettings.topic_views_heat_high )   return 'heatmap-high';
@@ -140,17 +113,43 @@ Discourse.Topic = Discourse.Model.extend({
   archetypeObject: function() {
     return Discourse.Site.currentProp('archetypes').findProperty('id', this.get('archetype'));
   }.property('archetype'),
+
   isPrivateMessage: Em.computed.equal('archetype', 'private_message'),
+  isBanner: Em.computed.equal('archetype', 'banner'),
 
   toggleStatus: function(property) {
     this.toggleProperty(property);
-    if (property === 'closed' && this.get('closed')) {
+    this.saveStatus(property, this.get(property) ? true : false);
+  },
+
+  setStatus: function(property, value) {
+    this.set(property, value);
+    this.saveStatus(property, value);
+  },
+
+  saveStatus: function(property, value) {
+    if (property === 'closed' && value === true) {
       this.set('details.auto_close_at', null);
+    }
+    if (property === 'pinned') {
+      this.set('pinned_at', value ? moment() : null);
     }
     return Discourse.ajax(this.get('url') + "/status", {
       type: 'PUT',
-      data: {status: property, enabled: this.get(property) ? 'true' : 'false' }
+      data: {status: property, enabled: value ? 'true' : 'false' }
     });
+  },
+
+  makeBanner: function() {
+    var self = this;
+    return Discourse.ajax('/t/' + this.get('id') + '/make-banner', { type: 'PUT' })
+           .then(function () { self.set('archetype', 'banner'); });
+  },
+
+  removeBanner: function() {
+    var self = this;
+    return Discourse.ajax('/t/' + this.get('id') + '/remove-banner', { type: 'PUT' })
+           .then(function () { self.set('archetype', 'regular'); });
   },
 
   starTooltipKey: function() {
@@ -166,8 +165,7 @@ Discourse.Topic = Discourse.Model.extend({
     if (!wordCount) return;
 
     // Avg for 500 words per minute when you account for skimming
-    var minutes = Math.floor(wordCount / 500.0);
-    return minutes;
+    return Math.floor(wordCount / 500.0);
   }.property('word_count'),
 
   toggleStar: function() {
@@ -212,10 +210,10 @@ Discourse.Topic = Discourse.Model.extend({
     @method createInvite
     @param {String} emailOrUsername The email or username of the user to be invited
   **/
-  createInvite: function(emailOrUsername) {
+  createInvite: function(emailOrUsername, groupNames) {
     return Discourse.ajax("/t/" + this.get('id') + "/invite", {
       type: 'POST',
-      data: { user: emailOrUsername }
+      data: { user: emailOrUsername, group_names: groupNames }
     });
   },
 
@@ -256,6 +254,10 @@ Discourse.Topic = Discourse.Model.extend({
 
   },
 
+  isPinnedUncategorized: function() {
+    return this.get('pinned') && this.get('category.isUncategorizedCategory');
+  }.property('pinned', 'category.isUncategorizedCategory'),
+
   /**
     Clears the pin from a topic for the currently logged in user
 
@@ -266,12 +268,35 @@ Discourse.Topic = Discourse.Model.extend({
 
     // Clear the pin optimistically from the object
     topic.set('pinned', false);
+    topic.set('unpinned', true);
 
     Discourse.ajax("/t/" + this.get('id') + "/clear-pin", {
       type: 'PUT'
     }).then(null, function() {
       // On error, put the pin back
       topic.set('pinned', true);
+      topic.set('unpinned', false);
+    });
+  },
+
+  /**
+    Re-pins a topic with a cleared pin
+
+    @method rePin
+  **/
+  rePin: function() {
+    var topic = this;
+
+    // Clear the pin optimistically from the object
+    topic.set('pinned', true);
+    topic.set('unpinned', false);
+
+    Discourse.ajax("/t/" + this.get('id') + "/re-pin", {
+      type: 'PUT'
+    }).then(null, function() {
+      // On error, put the pin back
+      topic.set('pinned', true);
+      topic.set('unpinned', false);
     });
   },
 
@@ -305,7 +330,27 @@ Discourse.Topic.reopenClass({
     WATCHING: 3,
     TRACKING: 2,
     REGULAR: 1,
-    MUTE: 0
+    MUTED: 0
+  },
+
+  createActionSummary: function(result) {
+    if (result.actions_summary) {
+      var lookup = Em.Object.create();
+      result.actions_summary = result.actions_summary.map(function(a) {
+        a.post = result;
+        a.actionType = Discourse.Site.current().postActionTypeById(a.id);
+        var actionSummary = Discourse.ActionSummary.create(a);
+        lookup.set(a.actionType.get('name_key'), actionSummary);
+        return actionSummary;
+      });
+      result.set('actionByName', lookup);
+    }
+  },
+
+  create: function() {
+    var result = this._super.apply(this, arguments);
+    this.createActionSummary(result);
+    return result;
   },
 
   /**
@@ -382,7 +427,40 @@ Discourse.Topic.reopenClass({
       promise.reject(new Error("error moving posts topic"));
     });
     return promise;
+  },
+
+  changeOwners: function(topicId, opts) {
+    var promise = Discourse.ajax("/t/" + topicId + "/change-owner", {
+      type: 'POST',
+      data: opts
+    }).then(function (result) {
+      if (result.success) return result;
+      promise.reject(new Error("error changing ownership of posts"));
+    });
+    return promise;
+  },
+
+  bulkOperation: function(topics, operation) {
+    return Discourse.ajax("/topics/bulk", {
+      type: 'PUT',
+      data: {
+        topic_ids: topics.map(function(t) { return t.get('id'); }),
+        operation: operation
+      }
+    });
+  },
+
+  bulkOperationByFilter: function(filter, operation) {
+    return Discourse.ajax("/topics/bulk", {
+      type: 'PUT',
+      data: { filter: filter, operation: operation }
+    });
+  },
+
+  resetNew: function() {
+    return Discourse.ajax("/topics/reset-new", {type: 'PUT'});
   }
+
 
 });
 

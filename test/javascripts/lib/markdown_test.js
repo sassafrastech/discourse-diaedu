@@ -5,7 +5,9 @@ module("Discourse.Markdown", {
 });
 
 var cooked = function(input, expected, text) {
-  var result = Discourse.Markdown.cook(input, {mentionLookup: false, sanitize: true});
+  var result = Discourse.Markdown.cook(input, {sanitize: true});
+  expected = expected.replace(/\/>/g, ">");
+  // result = result.replace("/>", ">");
   equal(result, expected, text);
 };
 
@@ -19,6 +21,7 @@ test("basic cooking", function() {
   cooked("__bold__", "<p><strong>bold</strong></p>", "it bolds text.");
   cooked("*trout*", "<p><em>trout</em></p>", "it italicizes text.");
   cooked("_trout_", "<p><em>trout</em></p>", "it italicizes text.");
+  cooked("*this is italic **with some bold** inside*", "<p><em>this is italic <strong>with some bold</strong> inside</em></p>", "it handles nested bold in italics");
   cooked("***hello***", "<p><strong><em>hello</em></strong></p>", "it can do bold and italics at once.");
   cooked("word_with_underscores", "<p>word_with_underscores</p>", "it doesn't do intraword italics");
   cooked("common/_special_font_face.html.erb", "<p>common/_special_font_face.html.erb</p>", "it doesn't intraword with a slash");
@@ -137,6 +140,8 @@ test("Links", function() {
   cooked("User [MOD]: Hello!",
          "<p>User [MOD]: Hello!</p>",
          "It does not consider references that are obviously not URLs");
+
+  cooked("<small>http://eviltrout.com</small>", "<p><small><a href=\"http://eviltrout.com\">http://eviltrout.com</a></small></p>", "Links within HTML tags");
 });
 
 test("simple quotes", function() {
@@ -160,20 +165,20 @@ test("Quotes", function() {
 
   cookedOptions("[quote=\"eviltrout, post: 1\"]\na quote\n\nsecond line\n\nthird line[/quote]",
                 { topicId: 2 },
-                "<p><aside class=\"quote\" data-post=\"1\"><div class=\"title\"><div class=\"quote-controls\"></div>eviltrout said:</div><blockquote>" +
-                "<p>a quote</p><p>second line</p><p>third line</p></blockquote></aside></p>",
+                "<aside class=\"quote\" data-post=\"1\"><div class=\"title\"><div class=\"quote-controls\"></div>eviltrout said:</div><blockquote>" +
+                "<p>a quote</p><p>second line</p><p>third line</p></blockquote></aside>",
                 "works with multiple lines");
 
   cookedOptions("1[quote=\"bob, post:1\"]my quote[/quote]2",
                 { topicId: 2, lookupAvatar: function(name) { return "" + name; }, sanitize: true },
-                "<p>1</p>\n\n<p><aside class=\"quote\" data-post=\"1\"><div class=\"title\"><div class=\"quote-controls\"></div>bob" +
-                "bob said:</div><blockquote><p>my quote</p></blockquote></aside></p>\n\n<p>2</p>",
+                "<p>1</p>\n\n<aside class=\"quote\" data-post=\"1\"><div class=\"title\"><div class=\"quote-controls\"></div>bob" +
+                "bob said:</div><blockquote><p>my quote</p></blockquote></aside>\n\n<p>2</p>",
                 "handles quotes properly");
 
   cookedOptions("1[quote=\"bob, post:1\"]my quote[/quote]2",
                 { topicId: 2, lookupAvatar: function() { } },
-                "<p>1</p>\n\n<p><aside class=\"quote\" data-post=\"1\"><div class=\"title\"><div class=\"quote-controls\"></div>bob said:" +
-                "</div><blockquote><p>my quote</p></blockquote></aside></p>\n\n<p>2</p>",
+                "<p>1</p>\n\n<aside class=\"quote\" data-post=\"1\"><div class=\"title\"><div class=\"quote-controls\"></div>bob said:" +
+                "</div><blockquote><p>my quote</p></blockquote></aside>\n\n<p>2</p>",
                 "includes no avatar if none is found");
 });
 
@@ -184,6 +189,14 @@ test("Mentions", function() {
   cookedOptions("Hello @sam", alwaysTrue,
                 "<p>Hello <a class=\"mention\" href=\"/users/sam\">@sam</a></p>",
                 "translates mentions to links");
+
+  cooked("[@codinghorror](https://twitter.com/codinghorror)",
+         "<p><a href=\"https://twitter.com/codinghorror\">@codinghorror</a></p>",
+         "it doesn't do mentions within links");
+
+  cookedOptions("[@codinghorror](https://twitter.com/codinghorror)", alwaysTrue,
+         "<p><a href=\"https://twitter.com/codinghorror\">@codinghorror</a></p>",
+         "it doesn't do link mentions within links");
 
   cooked("Hello @EvilTrout", "<p>Hello <span class=\"mention\">@EvilTrout</span></p>", "adds a mention class");
   cooked("robin@email.host", "<p>robin@email.host</p>", "won't add mention class to an email address");
@@ -231,6 +244,9 @@ test("Mentions", function() {
                 "<p><a class=\"mention\" href=\"/users/eviltrout\">@eviltrout</a></p>",
                 "it doesn't onebox mentions");
 
+  cookedOptions("<small>a @sam c</small>", alwaysTrue,
+                "<p><small>a <a class=\"mention\" href=\"/users/sam\">@sam</a> c</small></p>",
+                "it allows mentions within HTML tags");
 });
 
 
@@ -243,7 +259,7 @@ test("Heading", function() {
 test("Oneboxing", function() {
 
   var matches = function(input, regexp) {
-    return Discourse.Markdown.cook(input, {mentionLookup: false }).match(regexp);
+    return Discourse.Markdown.cook(input).match(regexp);
   };
 
   ok(!matches("- http://www.textfiles.com/bbs/MINDVOX/FORUMS/ethics\n\n- http://drupal.org", /onebox/),
@@ -272,6 +288,10 @@ test("links with full urls", function() {
 });
 
 test("Code Blocks", function() {
+
+  cooked("<pre>\nhello\n</pre>\n",
+         "<p><pre>\nhello</pre></p>",
+         "pre blocks don't include extra lines");
 
   cooked("```\na\nb\nc\n\nd\n```",
          "<p><pre><code class=\"lang-auto\">a\nb\nc\n\nd</code></pre></p>",
@@ -332,6 +352,8 @@ test("sanitize", function() {
   equal(sanitize("<i class=\"fa-bug fa-spin\">bug</i>"), "<i>bug</i>");
   equal(sanitize("<div><script>alert('hi');</script></div>"), "<div></div>");
   equal(sanitize("<div><p class=\"funky\" wrong='1'>hello</p></div>"), "<div><p>hello</p></div>");
+  equal(sanitize("<3 <3"), "&lt;3 &lt;3");
+  equal(sanitize("<_<"), "&lt;_&lt;");
   cooked("hello<script>alert(42)</script>", "<p>hello</p>", "it sanitizes while cooking");
 
   cooked("<a href='http://disneyland.disney.go.com/'>disney</a> <a href='http://reddit.com'>reddit</a>",
@@ -347,6 +369,15 @@ test("sanitize", function() {
   cooked("<iframe src=\"https://www.google.com/maps/embed?pb=!1m10!1m8!1m3!1d2624.9983685732213!2d2.29432085!3d48.85824149999999!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2s!4v1385737436368\" width=\"100\" height=\"42\"></iframe>",
          "<iframe src=\"https://www.google.com/maps/embed?pb=!1m10!1m8!1m3!1d2624.9983685732213!2d2.29432085!3d48.85824149999999!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2s!4v1385737436368\" width=\"100\" height=\"42\"></iframe>",
          "it allows iframe to google maps");
+  equal(sanitize("<textarea>hullo</textarea>"), "hullo");
+  equal(sanitize("<button>press me!</button>"), "press me!");
+  equal(sanitize("<canvas>draw me!</canvas>"), "draw me!");
+  equal(sanitize("<progress>hello"), "hello");
+  equal(sanitize("<mark>highlight</mark>"), "highlight");
+
+  cooked("[the answer](javascript:alert(42))", "<p><a>the answer</a></p>", "it prevents XSS");
+
+  cooked("<i class=\"fa fa-bug fa-spin\" style=\"font-size:600%\"></i>\n<!-- -->", "<p><i></i><br/></p>", "it doesn't circumvent XSS with comments");
 });
 
 test("URLs in BBCode tags", function() {
@@ -374,5 +405,11 @@ test("urlAllowed", function() {
   allowed("http://eviltrout.com/evil/trout", "allows full urls");
   allowed("https://eviltrout.com/evil/trout", "allows https urls");
   allowed("//eviltrout.com/evil/trout", "allows protocol relative urls");
+});
 
+test("images", function() {
+
+  cooked("[![folksy logo](http://folksy.com/images/folksy-colour.png)](http://folksy.com/)",
+         "<p><a href=\"http://folksy.com/\"><img src=\"http://folksy.com/images/folksy-colour.png\" alt=\"folksy logo\"/></a></p>",
+         "It allows images with links around them");
 });

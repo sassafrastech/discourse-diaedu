@@ -1,3 +1,5 @@
+/* global asyncTest, requirejs, require */
+/* exported integration, testController, controllerFor, asyncTestDiscourse, fixture */
 function integration(name, lifecycle) {
   module("Integration: " + name, {
     setup: function() {
@@ -23,13 +25,26 @@ function integration(name, lifecycle) {
 }
 
 function testController(klass, model) {
+  // HAX until we get ES6 everywhere:
+  if (typeof klass === "string") {
+    var moduleName = 'discourse/controllers/' + klass,
+        module = requirejs.entries[moduleName];
+    if (module) {
+      klass = require(moduleName, null, null, true).default;
+    }
+  }
+
   return klass.create({model: model, container: Discourse.__container__});
 }
 
 function controllerFor(controller, model) {
-  var controller = Discourse.__container__.lookup('controller:' + controller);
+  controller = Discourse.__container__.lookup('controller:' + controller);
   if (model) { controller.set('model', model ); }
   return controller;
+}
+
+function viewClassFor(name) {
+  return Discourse.__container__.lookupFactory('view:' + name);
 }
 
 function asyncTestDiscourse(text, func) {

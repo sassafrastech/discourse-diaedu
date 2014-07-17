@@ -4,10 +4,14 @@ require_dependency 'discourse'
 require_dependency 'custom_renderer'
 require_dependency 'archetype'
 require_dependency 'rate_limiter'
+require_dependency 'crawler_detection'
+require_dependency 'json_error'
+require_dependency 'letter_avatar'
 
 class ApplicationController < ActionController::Base
   include CurrentUser
   include CanonicalURL::ControllerExtensions
+  include JsonError
 
   serialization_scope :guardian
 
@@ -25,16 +29,27 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  before_filter :set_current_user_for_logs
   before_filter :set_locale
   before_filter :set_mobile_view
   before_filter :inject_preview_style
   before_filter :disable_customization
-  before_filter :block_if_maintenance_mode
+  before_filter :block_if_readonly_mode
   before_filter :authorize_mini_profiler
   before_filter :store_incoming_links
   before_filter :preload_json
   before_filter :check_xhr
   before_filter :redirect_to_login_if_required
+
+  layout :set_layout
+
+  def has_escaped_fragment?
+    SiteSetting.enable_escaped_fragments? && params.key?("_escaped_fragment_")
+  end
+
+  def set_layout
+    has_escaped_fragment? || CrawlerDetection.crawler?(request.user_agent) ? 'crawler' : 'application'
+  end
 
   rescue_from Exception do |exception|
     unless [ActiveRecord::RecordNotFound,
@@ -49,7 +64,6 @@ class ApplicationController < ActionController::Base
     end
     raise
   end
-
 
   # Some exceptions
   class RenderEmpty < Exception; end
@@ -76,7 +90,13 @@ class ApplicationController < ActionController::Base
 
   rescue_from Discourse::NotLoggedIn do |e|
     raise e if Rails.env.test?
-    redirect_to "/"
+
+    if request.get?
+      redirect_to "/"
+    else
+      render status: 403, json: failed_json.merge(message: I18n.t(:not_logged_in))
+    end
+
   end
 
   rescue_from Discourse::NotFound do
@@ -84,22 +104,36 @@ class ApplicationController < ActionController::Base
   end
 
   rescue_from Discourse::InvalidAccess do
-    rescue_discourse_actions("[error: 'invalid access']", 403) # TODO: this breaks json responses
+    rescue_discourse_actions("[error: 'invalid access']", 403, true) # TODO: this breaks json responses
   end
 
-  def rescue_discourse_actions(message, error)
+  rescue_from Discourse::ReadOnly do
+    render status: 405, json: failed_json.merge(message: I18n.t("read_only_mode_enabled"))
+  end
+
+  def rescue_discourse_actions(message, error, include_ember=false)
     if request.format && request.format.json?
       # TODO: this doesn't make sense. Stuffing an html page into a json response will cause
       #       $.parseJSON to fail in the browser. Also returning text like "[error: 'invalid access']"
       #       from the above rescue_from blocks will fail because that isn't valid json.
       render status: error, layout: false, text: (error == 404) ? build_not_found_page(error) : message
     else
-      render text: build_not_found_page(error, 'no_js')
+      render text: build_not_found_page(error, include_ember ? 'application' : 'no_js')
+    end
+  end
+
+  def set_current_user_for_logs
+    if current_user
+      Logster.add_to_env(request.env,"username",current_user.username)
     end
   end
 
   def set_locale
-    I18n.locale = SiteSetting.default_locale
+    I18n.locale = if SiteSetting.allow_user_locale && current_user && current_user.locale.present?
+                    current_user.locale
+                  else
+                    SiteSetting.default_locale
+                  end
   end
 
   def store_preloaded(key, json)
@@ -129,7 +163,13 @@ class ApplicationController < ActionController::Base
 
   def inject_preview_style
     style = request['preview-style']
-    session[:preview_style] = style if style
+    if style.blank?
+      session[:preview_style] = nil
+    elsif style == "default"
+      session[:preview_style] = ""
+    else
+      session[:preview_style] = style
+    end
   end
 
   def disable_customization
@@ -143,9 +183,9 @@ class ApplicationController < ActionController::Base
   def serialize_data(obj, serializer, opts={})
     # If it's an array, apply the serializer as an each_serializer to the elements
     serializer_opts = {scope: guardian}.merge!(opts)
-    if obj.is_a?(Array) or obj.is_a?(ActiveRecord::Associations::CollectionProxy)
+    if obj.respond_to?(:to_ary)
       serializer_opts[:each_serializer] = serializer
-      ActiveModel::ArraySerializer.new(obj, serializer_opts).as_json
+      ActiveModel::ArraySerializer.new(obj.to_ary, serializer_opts).as_json
     else
       serializer.new(obj, serializer_opts).as_json
     end
@@ -174,10 +214,13 @@ class ApplicationController < ActionController::Base
   end
 
   def fetch_user_from_params
-    username_lower = params[:username].downcase
-    username_lower.gsub!(/\.json$/, '')
-
-    user = User.where(username_lower: username_lower).first
+    user = if params[:username]
+      username_lower = params[:username].downcase
+      username_lower.gsub!(/\.json$/, '')
+      User.find_by(username_lower: username_lower)
+    elsif params[:external_id]
+      SingleSignOnRecord.find_by(external_id: params[:external_id]).try(:user)
+    end
     raise Discourse::NotFound.new if user.blank?
 
     guardian.ensure_can_see!(user)
@@ -197,9 +240,10 @@ class ApplicationController < ActionController::Base
   private
 
     def preload_anonymous_data
-      store_preloaded("site", Site.cached_json(guardian))
+      store_preloaded("site", Site.json_for(guardian))
       store_preloaded("siteSettings", SiteSetting.client_settings_json)
       store_preloaded("customHTML", custom_html_json)
+      store_preloaded("banner", banner_json)
     end
 
     def preload_current_user_data
@@ -209,26 +253,39 @@ class ApplicationController < ActionController::Base
     end
 
     def custom_html_json
-      MultiJson.dump({
+      data = {
         top: SiteContent.content_for(:top),
-        bottom: SiteContent.content_for(:bottom),
-      })
+        bottom: SiteContent.content_for(:bottom)
+      }
+
+      if SiteSetting.tos_accept_required && !current_user
+        data[:tos_signup_form_message] = SiteContent.content_for(:tos_signup_form_message)
+      end
+
+      if DiscoursePluginRegistry.custom_html
+        data.merge! DiscoursePluginRegistry.custom_html
+      end
+
+      MultiJson.dump(data)
+    end
+
+    def banner_json
+      topic = Topic.where(archetype: Archetype.banner).limit(1).first
+      banner = topic.present? ? topic.banner : {}
+
+      MultiJson.dump(banner)
     end
 
     def render_json_error(obj)
-      if obj.present?
-        render json: MultiJson.dump(errors: obj.errors.full_messages), status: 422
-      else
-        render json: MultiJson.dump(errors: [I18n.t('js.generic_error')]), status: 422
-      end
+      render json: MultiJson.dump(create_errors_json(obj)), status: 422
     end
 
     def success_json
-      {success: 'OK'}
+      { success: 'OK' }
     end
 
     def failed_json
-      {failed: 'FAILED'}
+      { failed: 'FAILED' }
     end
 
     def json_result(obj, opts={})
@@ -244,16 +301,6 @@ class ApplicationController < ActionController::Base
         render json: MultiJson.dump(json)
       else
         render_json_error(obj)
-      end
-    end
-
-    def block_if_maintenance_mode
-      if Discourse.maintenance_mode?
-        if request.format.json?
-          render status: 503, json: failed_json.merge(message: I18n.t('site_under_maintenance'))
-        else
-          render status: 503, file: File.join( Rails.root, 'public', '503.html' ), layout: false
-        end
       end
     end
 
@@ -292,9 +339,15 @@ class ApplicationController < ActionController::Base
       redirect_to :login if SiteSetting.login_required?
     end
 
+    def block_if_readonly_mode
+      return if request.fullpath.start_with?("/admin/backups")
+      raise Discourse::ReadOnly.new if !request.get? && Discourse.readonly_mode?
+    end
+
     def build_not_found_page(status=404, layout=false)
-      @top_viewed = Topic.top_viewed(10)
-      @recent = Topic.recent(10)
+      category_topic_ids = Category.pluck(:topic_id).compact
+      @top_viewed = Topic.where.not(id: category_topic_ids).top_viewed(10)
+      @recent = Topic.where.not(id: category_topic_ids).recent(10)
       @slug =  params[:slug].class == String ? params[:slug] : ''
       @slug =  (params[:id].class == String ? params[:id] : '') if @slug.blank?
       @slug.gsub!('-',' ')

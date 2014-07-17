@@ -82,5 +82,58 @@ describe Discourse do
 
   end
 
+  context "#enable_readonly_mode" do
+
+    it "adds a key in redis and publish a message through the message bus" do
+      $redis.expects(:set).with(Discourse.readonly_mode_key, 1)
+      MessageBus.expects(:publish).with(Discourse.readonly_channel, true)
+      Discourse.enable_readonly_mode
+    end
+
+  end
+
+  context "#disable_readonly_mode" do
+
+    it "removes a key from redis and publish a message through the message bus" do
+      $redis.expects(:del).with(Discourse.readonly_mode_key)
+      MessageBus.expects(:publish).with(Discourse.readonly_channel, false)
+      Discourse.disable_readonly_mode
+    end
+
+  end
+
+  context "#readonly_mode?" do
+
+    it "returns true when the key is present in redis" do
+      $redis.expects(:get).with(Discourse.readonly_mode_key).returns("1")
+      Discourse.readonly_mode?.should == true
+    end
+
+    it "returns false when the key is not present in redis" do
+      $redis.expects(:get).with(Discourse.readonly_mode_key).returns(nil)
+      Discourse.readonly_mode?.should == false
+    end
+
+  end
+
+  context "#handle_exception" do
+    class TempLogger
+      attr_accessor :exception, :context
+      def handle_exception(exception, context)
+        self.exception = exception
+        self.context = context
+      end
+    end
+    
+    it "should not fail when called" do
+      logger = TempLogger.new
+      exception = StandardError.new
+
+      Discourse.handle_exception(exception, nil, logger)
+      logger.exception.should == exception
+      logger.context.keys.should == [:current_db, :current_hostname]
+    end
+  end
+
 end
 

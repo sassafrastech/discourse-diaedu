@@ -18,7 +18,31 @@ Discourse.Route = Em.Route.extend({
   **/
   activate: function() {
     this._super();
+    Em.run.scheduleOnce('afterRender', Discourse.Route, 'cleanDOM');
+  }
 
+});
+
+var routeBuilder;
+
+Discourse.Route.reopenClass({
+
+  buildRoutes: function(builder) {
+    var oldBuilder = routeBuilder;
+    routeBuilder = function() {
+      if (oldBuilder) oldBuilder.call(this);
+      return builder.call(this);
+    };
+  },
+
+  mapRoutes: function() {
+    Discourse.Router.map(function() {
+      routeBuilder.call(this);
+      this.route('unknown', {path: '*path'});
+    });
+  },
+
+  cleanDOM: function() {
     // Close mini profiler
     $('.profiler-results .profiler-result').remove();
 
@@ -29,23 +53,15 @@ Discourse.Route = Em.Route.extend({
     // close the lightbox
     if ($.magnificPopup && $.magnificPopup.instance) { $.magnificPopup.instance.close(); }
 
-    Discourse.set('notifyCount',0);
+    // Remove any link focus
+    // NOTE: the '.not("body")' is here to prevent a bug in IE10 on Win7
+    // cf. https://stackoverflow.com/questions/5657371/ie9-window-loses-focus-due-to-jquery-mobile
+    $(document.activeElement).not("body").blur();
 
+    Discourse.set('notifyCount',0);
+    $('#discourse-modal').modal('hide');
     var hideDropDownFunction = $('html').data('hide-dropdown');
     if (hideDropDownFunction) { hideDropDownFunction(); }
-  }
-
-});
-
-
-Discourse.Route.reopenClass({
-
-  buildRoutes: function(builder) {
-    var oldBuilder = Discourse.routeBuilder;
-    Discourse.routeBuilder = function() {
-      if (oldBuilder) oldBuilder.call(this);
-      return builder.call(this);
-    };
   },
 
   /**

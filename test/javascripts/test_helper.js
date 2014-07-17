@@ -1,5 +1,5 @@
 /*jshint maxlen:250 */
-/*global count:true find:true document:true equal:true sinon:true */
+/*global document, sinon, console, QUnit */
 
 //= require env
 
@@ -9,7 +9,7 @@
 //= require ../../app/assets/javascripts/discourse/lib/probes.js
 
 // Externals we need to load first
-//= require development/jquery-2.0.3.js
+//= require development/jquery-2.1.1.js
 //= require jquery.ui.widget.js
 //= require handlebars.js
 //= require development/ember.js
@@ -21,9 +21,11 @@
 
 // Pagedown customizations
 //= require ../../app/assets/javascripts/pagedown_custom.js
-//
+
+//= require ../../public/javascripts/highlight.pack.js
+
 //= require vendor
-//
+
 //= require htmlparser.js
 
 // Stuff we need to load first
@@ -79,11 +81,7 @@ Discourse.setupForTesting();
 Discourse.injectTestHelpers();
 Discourse.runInitializers();
 Discourse.start();
-
-Discourse.Router.map(function() {
-  Discourse.routeBuilder.call(this);
-});
-
+Discourse.Route.mapRoutes();
 
 QUnit.testStart(function() {
   // Allow our tests to change site settings and have them reset before the next test

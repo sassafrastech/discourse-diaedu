@@ -8,6 +8,10 @@
 **/
 Discourse.User = Discourse.Model.extend({
 
+  hasPMs: Em.computed.gt("private_messages_stats.all", 0),
+  hasStartedPMs: Em.computed.gt("private_messages_stats.mine", 0),
+  hasUnreadPMs: Em.computed.gt("private_messages_stats.unread", 0),
+
   /**
     The user's stream
 
@@ -61,14 +65,29 @@ Discourse.User = Discourse.Model.extend({
     return this.get('website').split("/")[2];
   }.property('website'),
 
+  /**
+    This user's profile background(in CSS).
+
+    @property websiteName
+    @type {String}
+  **/
+  profileBackground: function() {
+    var background = this.get('profile_background');
+    if(Em.isEmpty(background) || !Discourse.SiteSettings.allow_profile_backgrounds) { return; }
+
+    return 'background-image: url(' + background + ')';
+  }.property('profile_background'),
+
   statusIcon: function() {
-    var desc;
+    var name = Handlebars.Utils.escapeExpression(this.get('name')),
+        desc;
+
     if(this.get('admin')) {
-      desc = I18n.t('user.admin', {user: this.get("name")});
+      desc = I18n.t('user.admin', {user: name});
       return '<i class="fa fa-trophy" title="' + desc +  '" alt="' + desc + '"></i>';
     }
     if(this.get('moderator')){
-      desc = I18n.t('user.moderator', {user: this.get("name")});
+      desc = I18n.t('user.moderator', {user: name});
       return '<i class="fa fa-magic" title="' + desc +  '" alt="' + desc + '"></i>';
     }
     return null;
@@ -109,6 +128,10 @@ Discourse.User = Discourse.Model.extend({
   trustLevel: function() {
     return Discourse.Site.currentProp('trustLevels').findProperty('id', parseInt(this.get('trust_level'), 10));
   }.property('trust_level'),
+
+  isLeader: Em.computed.equal('trust_level', 3),
+  isElder: Em.computed.equal('trust_level', 4),
+  canManageTopic: Em.computed.or('staff', 'isElder'),
 
   isSuspended: Em.computed.equal('suspended', true),
 
@@ -169,7 +192,9 @@ Discourse.User = Discourse.Model.extend({
     var data = this.getProperties('auto_track_topics_after_msecs',
                                'bio_raw',
                                'website',
+                               'location',
                                'name',
+                               'locale',
                                'email_digests',
                                'email_direct',
                                'email_always',
@@ -178,8 +203,10 @@ Discourse.User = Discourse.Model.extend({
                                'digest_after_days',
                                'new_topic_duration_minutes',
                                'external_links_in_new_tab',
-                               'watch_new_topics',
-                               'enable_quoting');
+                               'mailing_list_mode',
+                               'enable_quoting',
+                               'disable_jump_reply',
+                               'custom_fields');
 
     _.each(['muted','watched','tracked'], function(s){
       var cats = user.get(s + 'Categories').map(function(c){ return c.get('id')});
@@ -230,8 +257,8 @@ Discourse.User = Discourse.Model.extend({
       if (result) {
         if ((user.get('streamFilter') || result.action_type) !== result.action_type) return;
         var action = Discourse.UserAction.collapseStream([Discourse.UserAction.create(result)]);
-        stream.set('itemsLoaded', user.get('itemsLoaded') + 1);
-        stream.insertAt(0, action[0]);
+        stream.set('itemsLoaded', stream.get('itemsLoaded') + 1);
+        stream.get('content').insertAt(0, action[0]);
       }
     });
   },
@@ -262,18 +289,6 @@ Discourse.User = Discourse.Model.extend({
     return this.get('stats').rejectProperty('isPM');
   }.property('stats.@each.isPM'),
 
-  /**
-  This user's stats, only including PMs.
-
-    @property statsPmsOnly
-    @type {Array}
-  **/
-  statsPmsOnly: function() {
-    if (this.blank('stats')) return [];
-    return this.get('stats').filterProperty('isPM');
-  }.property('stats.@each.isPM'),
-
-
   findDetails: function() {
     var user = this;
 
@@ -288,8 +303,24 @@ Discourse.User = Discourse.Model.extend({
         }));
       }
 
+      if (!Em.isEmpty(json.user.custom_groups)) {
+        json.user.custom_groups = json.user.custom_groups.map(function (g) {
+          return Discourse.Group.create(g);
+        });
+      }
+
       if (json.user.invited_by) {
         json.user.invited_by = Discourse.User.create(json.user.invited_by);
+      }
+
+      if (!Em.isEmpty(json.user.featured_user_badge_ids)) {
+        var userBadgesMap = {};
+        Discourse.UserBadge.createFromJson(json).forEach(function(userBadge) {
+          userBadgesMap[ userBadge.get('id') ] = userBadge;
+        });
+        json.user.featured_user_badges = json.user.featured_user_badge_ids.map(function(id) {
+          return userBadgesMap[id];
+        });
       }
 
       user.setProperties(json.user);
@@ -297,17 +328,18 @@ Discourse.User = Discourse.Model.extend({
     });
   },
 
+  avatarTemplate: function() {
+    return Discourse.User.avatarTemplate(this.get('username'), this.get('uploaded_avatar_id'));
+  }.property('uploaded_avatar_id', 'username'),
+
   /*
     Change avatar selection
-
-    @method toggleAvatarSelection
-    @param {Boolean} useUploadedAvatar true if the user is using the uploaded avatar
-    @returns {Promise} the result of the toggle avatar selection
   */
-  toggleAvatarSelection: function(useUploadedAvatar) {
-    return Discourse.ajax("/users/" + this.get("username_lower") + "/preferences/avatar/toggle", {
+  pickAvatar: function(uploadId) {
+    this.set("uploaded_avatar_id", uploadId);
+    return Discourse.ajax("/users/" + this.get("username_lower") + "/preferences/avatar/pick", {
       type: 'PUT',
-      data: { use_uploaded_avatar: useUploadedAvatar }
+      data: { upload_id: uploadId }
     });
   },
 
@@ -331,34 +363,12 @@ Discourse.User = Discourse.Model.extend({
     @param {String} email The email address of the user to invite to the site
     @returns {Promise} the result of the server call
   **/
-  createInvite: function(email) {
+  createInvite: function(email, groupNames) {
     return Discourse.ajax('/invites', {
       type: 'POST',
-      data: {email: email}
+      data: {email: email, group_names: groupNames}
     });
   },
-
-  hasBeenSeenInTheLastMonth: function() {
-    return moment().diff(moment(this.get('last_seen_at')), 'month', true) < 1.0;
-  }.property("last_seen_at"),
-
-  /**
-    Homepage of the user
-
-    @property homepage
-    @type {String}
-  **/
-  homepage: function() {
-    // top is the default for:
-    //   - new users
-    //   - long-time-no-see user (ie. > 1 month)
-    if (Discourse.SiteSettings.top_menu.indexOf("top") >= 0) {
-      if (this.get("trust_level") === 0 || !this.get("hasBeenSeenInTheLastMonth")) {
-        return "top";
-      }
-    }
-    return Discourse.Utilities.defaultHomepage();
-  }.property("trust_level", "hasBeenSeenInTheLastMonth"),
 
   updateMutedCategories: function() {
     this.set("mutedCategories", Discourse.Category.findByIds(this.muted_category_ids));
@@ -370,11 +380,58 @@ Discourse.User = Discourse.Model.extend({
 
   updateWatchedCategories: function() {
     this.set("watchedCategories", Discourse.Category.findByIds(this.watched_category_ids));
-  }.observes("watched_category_ids")
+  }.observes("watched_category_ids"),
+
+  canDeleteAccount: function() {
+    return this.get('can_delete_account') && ((this.get('reply_count')||0) + (this.get('topic_count')||0)) <= 1;
+  }.property('can_delete_account', 'reply_count', 'topic_count'),
+
+  "delete": function() {
+    if (this.get('can_delete_account')) {
+      return Discourse.ajax("/users/" + this.get('username'), {
+        type: 'DELETE',
+        data: {context: window.location.pathname}
+      });
+    } else {
+      return Ember.RSVP.reject(I18n.t('user.delete_yourself_not_allowed'));
+    }
+  },
+
+  dismissBanner: function (bannerKey) {
+    this.set("dismissed_banner_key", bannerKey);
+    Discourse.ajax("/users/" + this.get('username'), {
+      type: 'PUT',
+      data: { dismissed_banner_key: bannerKey }
+    });
+  }
 
 });
 
 Discourse.User.reopenClass(Discourse.Singleton, {
+
+  avatarTemplate: function(username, uploadedAvatarId) {
+    var url;
+    if (uploadedAvatarId) {
+      url = "/user_avatar/" +
+            Discourse.BaseUrl +
+            "/" +
+            username.toLowerCase() +
+            "/{size}/" +
+            uploadedAvatarId + ".png";
+    } else {
+      url = "/letter_avatar/" +
+            username.toLowerCase() +
+            "/{size}/" +
+            Discourse.LetterAvatarVersion + ".png";
+    }
+
+    url = Discourse.getURL(url);
+    if (Discourse.CDN) {
+      url = Discourse.CDN + url;
+    }
+    return url;
+  },
+
   /**
     Find a `Discourse.User` for a given username.
 
@@ -420,6 +477,7 @@ Discourse.User.reopenClass(Discourse.Singleton, {
     @method checkUsername
     @param {String} username A username to check
     @param {String} email An email address to check
+    @param {Number} forUserId user id - provide when changing username
   **/
   checkUsername: function(username, email, forUserId) {
     return Discourse.ajax('/users/check_username', {
@@ -431,7 +489,7 @@ Discourse.User.reopenClass(Discourse.Singleton, {
     Groups the user's statistics
 
     @method groupStats
-    @param {Array} Given stats
+    @param {Array} stats Given stats
     @returns {Object}
   **/
   groupStats: function(stats) {
@@ -466,6 +524,7 @@ Discourse.User.reopenClass(Discourse.Singleton, {
     @param {String} name This user's name
     @param {String} email This user's email
     @param {String} password This user's password
+    @param {String} username This user's username
     @param {String} passwordConfirm This user's confirmed password
     @param {String} challenge
     @returns Result of ajax call

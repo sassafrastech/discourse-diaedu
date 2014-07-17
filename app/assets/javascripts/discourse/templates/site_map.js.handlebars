@@ -5,8 +5,10 @@
       <li>{{partial "siteMap/flaggedPostsLinks"}}</li>
     {{/if}}
     <li>{{partial "siteMap/latestTopicsLink"}}</li>
+    {{#if showBadgesLink}}
+      <li>{{partial "siteMap/badges"}}</li>
+    {{/if}}
     <li>{{partial "siteMap/faqLink"}}</li>
-    <li>{{partial "siteMap/keyboardShortcutsHelpLink"}}</li>
     {{#if showMobileToggle}}
       <li>{{partial "siteMap/mobileToggleLink"}}</li>
     {{/if}}

@@ -2,6 +2,7 @@ class TopicRetriever
 
   def initialize(embed_url, opts=nil)
     @embed_url = embed_url
+    @author_username = opts[:author_username]
     @opts = opts || {}
   end
 
@@ -12,7 +13,7 @@ class TopicRetriever
   private
 
     def invalid_host?
-      SiteSetting.embeddable_host != URI(@embed_url).host
+      SiteSetting.normalized_embeddable_host != URI(@embed_url).host
     rescue URI::InvalidURIError
       # An invalid URI is an invalid host
       true
@@ -46,7 +47,13 @@ class TopicRetriever
     end
 
     def fetch_http
-      user = User.where(username_lower: SiteSetting.embed_by_username.downcase).first
+      if @author_username.nil?
+        username = SiteSetting.embed_by_username.downcase
+      else
+        username = @author_username
+      end
+
+      user = User.where(username_lower: username.downcase).first
       return if user.blank?
 
       TopicEmbed.import_remote(user, @embed_url)

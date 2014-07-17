@@ -1,7 +1,7 @@
 # See http://unicorn.bogomips.org/Unicorn/Configurator.html
 
 # enable out of band gc out of the box, it is low risk and improves perf a lot
-ENV['UNICORN_ENABLE_OOBGC'] = "1"
+ENV['UNICORN_ENABLE_OOBGC'] ||= "1"
 
 discourse_path = File.expand_path(File.expand_path(File.dirname(__FILE__)) + "/../")
 
@@ -11,7 +11,7 @@ worker_processes (ENV["UNICORN_WORKERS"] || 3).to_i
 working_directory discourse_path
 
 # listen "#{discourse_path}/tmp/sockets/unicorn.sock"
-listen 3000
+listen (ENV["UNICORN_PORT"] || 3000).to_i
 
 # nuke workers after 30 seconds instead of 60 seconds (the default)
 timeout 30
@@ -69,6 +69,42 @@ before_fork do |server, worker|
       end
     end
 
+    sidekiqs = ENV['UNICORN_SIDEKIQS'].to_i
+    if sidekiqs > 0
+      puts "Starting up #{sidekiqs} supervised sidekiqs"
+
+      require 'demon/sidekiq'
+
+      Demon::Sidekiq.start(sidekiqs)
+
+      class ::Unicorn::HttpServer
+        alias :master_sleep_orig :master_sleep
+
+        def check_sidekiq_heartbeat
+          @sidekiq_heartbeat_interval ||= 30.minutes
+          @sidekiq_next_heartbeat_check ||= Time.new.to_i + @sidekiq_heartbeat_interval
+
+          if @sidekiq_next_heartbeat_check < Time.new.to_i
+            last_heartbeat = Jobs::RunHeartbeat.last_heartbeat
+            if last_heartbeat < Time.new.to_i - @sidekiq_heartbeat_interval
+              STDERR.puts "Sidekiq heartbeat test failed, restarting"
+              puts "Sidekiq heartbeat test failed, restarting"
+
+              Demon::Sidekiq.restart
+            end
+            @sidekiq_next_heartbeat_check = Time.new.to_i + @sidekiq_heartbeat_interval
+          end
+        end
+
+        def master_sleep(sec)
+          Demon::Sidekiq.ensure_running
+          check_sidekiq_heartbeat
+
+          master_sleep_orig(sec)
+        end
+      end
+    end
+
   end
 
   ActiveRecord::Base.connection.disconnect!
@@ -83,8 +119,5 @@ before_fork do |server, worker|
 end
 
 after_fork do |server, worker|
-  ActiveRecord::Base.establish_connection
-  $redis.client.reconnect
-  Rails.cache.reconnect
-  MessageBus.after_fork
+  Discourse.after_fork
 end

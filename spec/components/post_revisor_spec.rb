@@ -14,40 +14,25 @@ describe PostRevisor do
     subject { described_class.new(post) }
 
     describe 'with the same body' do
-
-      it 'returns false' do
-        subject.revise!(post.user, post.raw).should be_false
-      end
-
       it "doesn't change version" do
-        lambda { subject.revise!(post.user, post.raw); post.reload }.should_not change(post, :version)
+        lambda {
+          subject.revise!(post.user, post.raw).should be_false
+          post.reload
+        }.should_not change(post, :version)
       end
-
     end
 
     describe 'ninja editing' do
-      before do
-        SiteSetting.expects(:ninja_edit_window).returns(1.minute.to_i)
+      it 'correctly applies edits' do
+        SiteSetting.ninja_edit_window = 1.minute.to_i
         subject.revise!(post.user, 'updated body', revised_at: post.updated_at + 10.seconds)
         post.reload
-      end
 
-      it 'does not update version' do
         post.version.should == 1
-      end
-
-      it 'does not create a new revision' do
         post.revisions.size.should == 0
-      end
-
-      it "doesn't change the last_version_at" do
         post.last_version_at.should == first_version_at
-      end
-
-      it "doesn't update a category" do
         subject.category_changed.should be_blank
       end
-
     end
 
     describe 'revision much later' do
@@ -191,7 +176,9 @@ describe PostRevisor do
 
       before do
         SiteSetting.stubs(:newuser_max_images).returns(0)
-        subject.revise!(changed_by, "So, post them here!\nhttp://i.imgur.com/FGg7Vzu.gif")
+        url = "http://i.imgur.com/wfn7rgU.jpg"
+        Oneboxer.stubs(:onebox).with(url, anything).returns("<img src='#{url}'>")
+        subject.revise!(changed_by, "So, post them here!\n#{url}")
       end
 
       it "allows an admin to insert images into a new user's post" do
@@ -208,12 +195,11 @@ describe PostRevisor do
       before do
         SiteSetting.stubs(:newuser_max_images).returns(0)
         url = "http://i.imgur.com/FGg7Vzu.gif"
-        # this test is problamatic, it leaves state in the onebox cache
-        Oneboxer.invalidate(url)
+        Oneboxer.stubs(:cached_onebox).with(url, anything).returns("<img src='#{url}'>")
         subject.revise!(post.user, "So, post them here!\n#{url}")
       end
 
-      it "allows an admin to insert images into a new user's post" do
+      it "doesn't allow images to be inserted" do
         post.errors.should be_present
       end
 
@@ -268,6 +254,22 @@ describe PostRevisor do
         it 'is a ninja edit, because the second poster posted again quickly' do
           post.revisions.size.should == 1
         end
+      end
+    end
+
+    describe "topic excerpt" do
+      it "topic excerpt is updated only if first post is revised" do
+        revisor = described_class.new(post)
+        first_post = topic.posts.by_post_number.first
+        expect {
+          revisor.revise!(first_post.user, 'Edit the first post', revised_at: first_post.updated_at + 10.seconds)
+          topic.reload
+        }.to change { topic.excerpt }
+        second_post = Fabricate(:post, post_args.merge(post_number: 2, topic_id: topic.id))
+        expect {
+          described_class.new(second_post).revise!(second_post.user, 'Edit the 2nd post')
+          topic.reload
+        }.to_not change { topic.excerpt }
       end
     end
   end

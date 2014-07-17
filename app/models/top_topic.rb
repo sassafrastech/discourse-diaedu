@@ -12,20 +12,11 @@ class TopTopic < ActiveRecord::Base
 
   def self.refresh!
     transaction do
-      # clean up the table
-      exec_sql("DELETE FROM top_topics")
-      # insert the list of all the visible topics
-      exec_sql("INSERT INTO top_topics (topic_id)
-                SELECT id
-                FROM topics
-                WHERE deleted_at IS NULL
-                AND visible
-                AND archetype <> :private_message
-                AND NOT archived",
-                private_message: Archetype::private_message)
-
+      # update the topics list
+      remove_invisible_topics
+      add_new_visible_topics
+      # update the denormalized data
       TopTopic.periods.each do |period|
-        # update all the counter caches
         TopTopic.sort_orders.each do |sort|
           TopTopic.send("update_#{sort}_count_for", period)
         end
@@ -35,14 +26,50 @@ class TopTopic < ActiveRecord::Base
     end
   end
 
+  def self.remove_invisible_topics
+    exec_sql("WITH category_definition_topic_ids AS (
+                SELECT COALESCE(topic_id, 0) AS id FROM categories
+              ), invisible_topic_ids AS (
+                SELECT id
+                FROM topics
+                WHERE deleted_at IS NOT NULL
+                   OR NOT visible
+                   OR archetype = :private_message
+                   OR archived
+                   OR id IN (SELECT id FROM category_definition_topic_ids)
+              )
+              DELETE FROM top_topics
+              WHERE topic_id IN (SELECT id FROM invisible_topic_ids)",
+              private_message: Archetype::private_message)
+  end
+
+  def self.add_new_visible_topics
+    exec_sql("WITH category_definition_topic_ids AS (
+                SELECT COALESCE(topic_id, 0) AS id FROM categories
+              ), visible_topics AS (
+              SELECT t.id
+              FROM topics t
+              LEFT JOIN top_topics tt ON t.id = tt.topic_id
+              WHERE t.deleted_at IS NULL
+                AND t.visible
+                AND t.archetype <> :private_message
+                AND NOT t.archived
+                AND t.id NOT IN (SELECT id FROM category_definition_topic_ids)
+                AND tt.topic_id IS NULL
+            )
+            INSERT INTO top_topics (topic_id)
+            SELECT id FROM visible_topics",
+            private_message: Archetype::private_message)
+  end
+
   def self.update_posts_count_for(period)
     sql = "SELECT topic_id, GREATEST(COUNT(*), 1) AS count
            FROM posts
            WHERE created_at >= :from
-           AND deleted_at IS NULL
-           AND NOT hidden
-           AND post_type = #{Post.types[:regular]}
-           AND user_id <> #{Discourse.system_user.id}
+             AND deleted_at IS NULL
+             AND NOT hidden
+             AND post_type = #{Post.types[:regular]}
+             AND user_id <> #{Discourse.system_user.id}
            GROUP BY topic_id"
 
     TopTopic.update_top_topics(period, "posts", sql)
@@ -61,20 +88,33 @@ class TopTopic < ActiveRecord::Base
     sql = "SELECT topic_id, GREATEST(SUM(like_count), 1) AS count
            FROM posts
            WHERE created_at >= :from
-           AND deleted_at IS NULL
-           AND NOT hidden
+             AND deleted_at IS NULL
+             AND NOT hidden
+             AND post_type = #{Post.types[:regular]}
            GROUP BY topic_id"
 
     TopTopic.update_top_topics(period, "likes", sql)
   end
 
   def self.compute_top_score_for(period)
-    # log(views) + (posts * likes)
-    exec_sql("UPDATE top_topics
-              SET #{period}_score = CASE
-                                      WHEN #{period}_views_count = 0 THEN 0
-                                      ELSE log(#{period}_views_count) + (#{period}_posts_count * #{period}_likes_count)
-                                    END")
+    sql = <<-SQL
+      WITH top AS (
+        SELECT CASE
+                 WHEN topics.created_at < :from THEN 0
+                 ELSE log(greatest(#{period}_views_count, 1)) + #{period}_likes_count + #{period}_posts_count * 2
+               END AS score,
+               topic_id
+        FROM top_topics
+        LEFT JOIN topics ON topics.id = top_topics.topic_id
+      )
+      UPDATE top_topics
+      SET #{period}_score = top.score
+      FROM top
+      WHERE top_topics.topic_id = top.topic_id
+        AND #{period}_score <> top.score
+    SQL
+
+    exec_sql(sql, from: start_of(period))
   end
 
   def self.start_of(period)
@@ -91,7 +131,49 @@ class TopTopic < ActiveRecord::Base
               SET #{period}_#{sort}_count = c.count
               FROM top_topics tt
               INNER JOIN (#{inner_join}) c ON tt.topic_id = c.topic_id
-              WHERE tt.topic_id = top_topics.topic_id", from: start_of(period))
+              WHERE tt.topic_id = top_topics.topic_id
+                AND tt.#{period}_#{sort}_count <> c.count",
+              from: start_of(period))
   end
 
 end
+
+# == Schema Information
+#
+# Table name: top_topics
+#
+#  id                  :integer          not null, primary key
+#  topic_id            :integer
+#  yearly_posts_count  :integer          default(0), not null
+#  yearly_views_count  :integer          default(0), not null
+#  yearly_likes_count  :integer          default(0), not null
+#  monthly_posts_count :integer          default(0), not null
+#  monthly_views_count :integer          default(0), not null
+#  monthly_likes_count :integer          default(0), not null
+#  weekly_posts_count  :integer          default(0), not null
+#  weekly_views_count  :integer          default(0), not null
+#  weekly_likes_count  :integer          default(0), not null
+#  daily_posts_count   :integer          default(0), not null
+#  daily_views_count   :integer          default(0), not null
+#  daily_likes_count   :integer          default(0), not null
+#  yearly_score        :float            default(0.0)
+#  monthly_score       :float            default(0.0)
+#  weekly_score        :float            default(0.0)
+#  daily_score         :float            default(0.0)
+#
+# Indexes
+#
+#  index_top_topics_on_daily_likes_count    (daily_likes_count)
+#  index_top_topics_on_daily_posts_count    (daily_posts_count)
+#  index_top_topics_on_daily_views_count    (daily_views_count)
+#  index_top_topics_on_monthly_likes_count  (monthly_likes_count)
+#  index_top_topics_on_monthly_posts_count  (monthly_posts_count)
+#  index_top_topics_on_monthly_views_count  (monthly_views_count)
+#  index_top_topics_on_topic_id             (topic_id) UNIQUE
+#  index_top_topics_on_weekly_likes_count   (weekly_likes_count)
+#  index_top_topics_on_weekly_posts_count   (weekly_posts_count)
+#  index_top_topics_on_weekly_views_count   (weekly_views_count)
+#  index_top_topics_on_yearly_likes_count   (yearly_likes_count)
+#  index_top_topics_on_yearly_posts_count   (yearly_posts_count)
+#  index_top_topics_on_yearly_views_count   (yearly_views_count)
+#

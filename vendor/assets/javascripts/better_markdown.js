@@ -437,11 +437,15 @@
   };
 
   function escapeHTML( text ) {
-    return text.replace( /&/g, "&amp;" )
-               .replace( /</g, "&lt;" )
-               .replace( />/g, "&gt;" )
-               .replace( /"/g, "&quot;" )
-               .replace( /'/g, "&#39;" );
+    if (text && text.length > 0) {
+      return text.replace( /&/g, "&amp;" )
+                 .replace( /</g, "&lt;" )
+                 .replace( />/g, "&gt;" )
+                 .replace( /"/g, "&quot;" )
+                 .replace( /'/g, "&#39;" );
+    } else {
+      return "";
+    }
   }
 
   function render_tree( jsonml ) {
@@ -449,7 +453,7 @@
     if ( typeof jsonml === "string" )
       return jsonml;
 
-    if ( jsonml[0] == "__RAW" ) {
+    if ( jsonml[0] === "__RAW" ) {
       return jsonml[1];
     }
 
@@ -573,7 +577,7 @@
       jsonml[ 0 ] = "img";
 
       // grab this ref and clean up the attribute node
-      var ref = references[ attrs.ref ];
+      ref = references[ attrs.ref ];
 
       // if the reference exists, make the link
       if ( ref ) {
@@ -682,7 +686,7 @@
       inline_until_char = DialectHelpers.inline_until_char;
 
   // A robust regexp for matching URLs. Thakns: https://gist.github.com/dperini/729294
-  var urlRegexp = /(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?/i.source;
+  var urlRegexp = /(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?/i.source;
 
   /**
    * Gruber dialect
@@ -741,8 +745,7 @@
         block_search:
         do {
           // Now pull out the rest of the lines
-          var b = this.loop_re_over_block(
-                    re, block.valueOf(), function( m ) { ret.push( m[1] ); } );
+          var b = this.loop_re_over_block(re, block.valueOf(), function(m) { ret.push( m[1] ); });
 
           if ( b.length ) {
             // Case alluded to in first comment. push it back on as a new block
@@ -1008,18 +1011,20 @@
               var contents = this.processBlock(li_accumulate, []),
                   firstBlock = contents[0];
 
-              firstBlock.shift();
-              contents.splice.apply(contents, [0, 1].concat(firstBlock));
-              add( last_li, loose, contents, nl );
+              if (firstBlock) {
+                firstBlock.shift();
+                contents.splice.apply(contents, [0, 1].concat(firstBlock));
+                add( last_li, loose, contents, nl );
 
-              // Let's not creating a trailing \n after content in the li
-              if(last_li[last_li.length-1] === "\n") {
-                last_li.pop();
+                // Let's not creating a trailing \n after content in the li
+                if(last_li[last_li.length-1] === "\n") {
+                  last_li.pop();
+                }
+
+                // Loose mode will have been dealt with. Reset it
+                loose = false;
+                li_accumulate = "";
               }
-
-              // Loose mode will have been dealt with. Reset it
-              loose = false;
-              li_accumulate = "";
             }
 
             // Look at the next block - we might have a loose list. Or an extra
@@ -1036,11 +1041,11 @@
 
             var next_block = next[0] && next[0].valueOf() || "";
 
-            if ( next_block.match(is_list_re) || (next_block.match(/^ /) && (!next_block.match(/^ *\>/))) ) {
+            if ( next_block.match(is_list_re) ) {
               block = next.shift();
 
               // Check for an HR following a list: features/lists/hr_abutting
-              var hr = this.dialect.block.horizRule( block, next );
+              var hr = this.dialect.block.horizRule.apply(this, [block, next]);
 
               if ( hr ) {
                 ret.push.apply(ret, hr);
@@ -1107,7 +1112,6 @@
 
         // Strip off the leading "> " and re-process as a block.
         var input = block.replace( /^> ?/gm, "" ),
-            old_tree = this.tree,
             processedBlock = this.toTree( input, [ "blockquote" ] ),
             attr = extract_attr( processedBlock );
 
@@ -1151,30 +1155,38 @@
     inline: {
 
       __oneElement__: function oneElement( text, patterns_or_re, previous_nodes ) {
-        var m,
-            res;
+        var m, res, pos, search_re, match_re;
+
+        // PERF NOTE: rewritten to avoid greedy match regex \([\s\S]*?)(...)\
+        // greedy match performs horribly with large inline blocks, it can be so
+        // slow it will crash chrome
 
         patterns_or_re = patterns_or_re || this.dialect.inline.__patterns__;
-        var re = new RegExp( "([\\s\\S]*?)(" + (patterns_or_re.source || patterns_or_re) + ")" );
+        search_re = new RegExp(patterns_or_re.source || patterns_or_re);
 
-        m = re.exec( text );
-        if (!m) {
-          // Just boring text
+        pos = text.search(search_re);
+
+        // Just boring text
+        if (pos === -1) {
           return [ text.length, text ];
         }
-        else if ( m[1] ) {
+
+        if (pos !== 0) {
           // Some un-interesting text matched. Return that first
-          return [ m[1].length, m[1] ];
+          return [pos, text.substring(0,pos)];
         }
 
-        var res;
-        if ( m[2] in this.dialect.inline ) {
-          res = this.dialect.inline[ m[2] ].call(
+        match_re = new RegExp( "^(" + (patterns_or_re.source || patterns_or_re) + ")" );
+        m = match_re.exec( text );
+
+        if ( m[1] in this.dialect.inline ) {
+          res = this.dialect.inline[ m[1] ].call(
                     this,
                     text.substr( m.index ), m, previous_nodes || [] );
         }
+
         // Default for now to make dev easier. just slurp special and output it.
-        res = res || [ m[2].length, m[2] ];
+        res = res || [ m[1].length, m[1] ];
         return res;
       },
 
@@ -1230,8 +1242,11 @@
         //
         // First attempt to use a strong URL regexp to catch things like parentheses. If it misses, use the
         // old one.
-        var m = text.match(new RegExp("^!\\[(.*?)][ \\t]*\\((" + urlRegexp + ")\\)([ \\t])*([\"'].*[\"'])?")) ||
-                text.match( /^!\[(.*?)\][ \t]*\([ \t]*([^")]*?)(?:[ \t]+(["'])(.*?)\3)?[ \t]*\)/ );
+        var origMatcher = /^!\[(.*?)\][ \t]*\([ \t]*([^")]*?)(?:[ \t]+(["'])(.*?)\3)?[ \t]*\)/;
+            m = text.match(new RegExp("^!\\[(.*?)][ \\t]*\\((" + urlRegexp + ")\\)([ \\t])*([\"'].*[\"'])?")) ||
+                text.match(origMatcher);
+
+        if (m && m[2].indexOf(")]") !== -1) { m = text.match(origMatcher); }
 
         if ( m ) {
           if ( m[2] && m[2][0] === "<" && m[2][m[2].length-1] === ">" )
@@ -1276,8 +1291,7 @@
 
         // No closing ']' found. Just consume the [
         if ( !res[1] ) {
-          var size = res[0] + 1;
-          return [ size, text.charAt(0) + res[2].join('') ];
+          return [ res[0] + 1, text.charAt(0) ].concat(res[2]);
         }
 
         var consumed = 1 + res[ 0 ],
@@ -1349,12 +1363,14 @@
           // [links][] uses links as its reference
           attrs = { ref: ( m[ 1 ] || String(children) ).toLowerCase(),  original: orig.substr( 0, consumed ) };
 
-          link = [ "link_ref", attrs ].concat( children );
+          if (children && children.length > 0) {
+            link = [ "link_ref", attrs ].concat( children );
 
-          // We can't check if the reference is known here as it likely wont be
-          // found till after. Check it in md tree->hmtl tree conversion.
-          // Store the original so that conversion can revert if the ref isn't found.
-          return [ consumed, link ];
+            // We can't check if the reference is known here as it likely wont be
+            // found till after. Check it in md tree->hmtl tree conversion.
+            // Store the original so that conversion can revert if the ref isn't found.
+            return [ consumed, link ];
+          }
         }
 
         // Another check for references
@@ -1362,10 +1378,10 @@
         if (m &&
             (/^(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?$/i.test(m[2]) ||
              /(\/[\w~,;\-\./?%&+#=]*)/.test(m[2]))) {
-          var attrs = create_attrs.call(this);
+          attrs = create_attrs.call(this);
           create_reference(attrs, m);
 
-          return [ m[0].length ]
+          return [ m[0].length ];
         }
 
         // [id]

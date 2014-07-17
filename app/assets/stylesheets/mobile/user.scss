@@ -1,42 +1,70 @@
 // styles that apply to the user page
-@import "../common/foundation/variables";
-@import "../common/foundation/mixins";
 
 .user-preferences {
+  .control-group {
+    // border-bottom: 1px solid #e5e5e5;
+    padding: 8px 36px 8px 8px;
+  }
+  .control-label {
+    font-weight: bold;
+  }
   textarea {
     width: 530px;
     height: 100px;
   }
   .static {
-    color: $black;
+    color: $primary;
     margin-top: 5px;
     margin-left: 5px;
     display: inline-block;
   }
   .instructions {
-    color: $dark_gray;
-    margin-left: 165px;
+    color: $primary;
     margin-top: 5px;
+  }
+  .category-controls {
+    padding-top: 8px;
   }
   .avatar {
     margin-left: 3px;
   }
   .instructions a[href] {
-    color: $darkish_gray;
+    color: $primary;
   }
   .warning {
     @include border-radius-all(6px);
-    background-color: lighten($red, 10%);
+    background-color: $danger;
     padding: 5px 8px;
-    color: $white;
+    color: $primary;
     width: 520px;
   }
 
-  .other .controls {
+  .other .controls-dropdown {
     margin-top: 10px;
+    padding-left: 5px;
     select {
       width: 280px;
     }
+  }
+
+  .save-button {
+    width: 100%;
+    overflow: auto;
+    max-width: 200px;
+    button {
+      display: block;
+    }
+  }
+
+  .checkbox-label {
+    overflow: auto;
+    display: block;
+    width: 100%;
+    padding: 5px 8px;
+  }
+
+  .bio-composer #wmd-quote-post {
+    display: none;
   }
 }
 
@@ -46,46 +74,22 @@
   display: block;
   width: 220px;
   min-height: 200px;
-  background-color: #f8f8f8;
-  color: #444;
+  background-color: scale-color-diff();
+  color: $primary;
   word-wrap: break-word;
 }
 
 .user-navigation {
 
   h3 {
-    color: #666;
+    color: scale-color($primary, $lightness: 50%);
     padding-left: 5px;
   }
   .nav-stacked {
     border-left: 0;
     border-right: 0;
   }
-  .map {
-    height: 50px;
-  }
-  .avatar {
-    float: left;
-    width: 45px;
-    background-color: white;
-  }
 
-  nav.buttons {
-    width: 180px;
-    padding: 0;
-    .btn {
-      width: 100%;
-      margin-bottom: 5px;
-      @include box-sizing(border-box);
-    }
-  }
-  h2 {
-    a {
-      font-size: 14px;
-      color: #999999;
-      cursor: pointer;
-    }
-  }
 }
 
 .user-main {
@@ -93,10 +97,12 @@
   margin-bottom: 50px;
 
   .about {
-    background-color: #444;
+    background-color: scale-color-diff();
+    background-position: center center;
+    background-size: cover;
     margin-bottom: 10px;
     overflow: hidden;
-    color: #fff;
+    color: $primary;
 
     .details {
       text-align: center;
@@ -111,36 +117,40 @@
         font-size: 20px;
         margin-bottom: 6px;
         font-weight: normal;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       a[href] {
-        color: #fff;
+        color: $primary;
       }
 
       img.avatar {
-        border: 3px solid #eee;
+        border: 3px solid scale-color-diff();
         margin-bottom: 4px;
       }
 
       .secondary {
-        background-color: #222;
+        background-color: $primary;
         text-align: left;
         padding: 0 10px;
 
         dd {
-          color: white;
+          color: $secondary;
           margin: 0 0 7px 0;
         }
         dt {
-          color: #aaa;
+          color: scale-color($primary, $lightness: 75%);
           margin: 0;
         }
       }
     }
 
     .controls {
-      background-color: #ddd;
-      margin-top: 0px;
+      background-color: scale-color($primary, $lightness: 75%);
+      margin-top: 0;
       padding: 10px 10px 0 10px;
 
       .btn {
@@ -167,7 +177,7 @@
         .avatar {
           float: left;
           margin-right: 10px;
-          border: 2px solid white;
+          border: 2px solid $tertiary;
           width: 45px;
           height: 45px;
         }
@@ -189,17 +199,17 @@
 
   .user-stream {
     .excerpt {
-      margin: 5px 0px;
+      margin: 5px 0;
       font-size: 13px;
       word-wrap: break-word;
-      color: lighten($black, 30%);
+      color: scale-color($primary, $lightness: 50%);
     }
     .item.moderator-action {
-      background-color: #eef0ff;
+      background-color: scale-color($tertiary, $lightness: 40%);
     }
     .item.deleted {
       opacity: 0.8;
-      background-color: #ffcece;
+      background-color: scale-color($danger, $lightness: 50%);
     }
     .item.hidden {
       display: block;
@@ -207,19 +217,19 @@
     }
     .item {
       padding: 10px 8px;
-      background-color: white;
-      border-bottom: 1px solid #b9b9b9;
+      background-color: $secondary;
+      border-bottom: 1px solid scale-color-diff();
     }
     .type {
-      color: lighten($black, 40%);
+      color: scale-color($primary, $lightness: 50%);
     }
     span.name {
-      color: lighten($black, 40%);
+      color: scale-color($primary, $lightness: 50%);
     }
     .time {
       display: block;
       float: right;
-      color: silver;
+      color: $primary;
       margin-right: 8px;
       font-size: 11px;
     }
@@ -233,43 +243,12 @@
       font-size: 14px;
     }
     .edit-reason {
-      background-color: #ffffcc;
+      background-color: scale-color($highlight, $lightness: 50%);
       padding: 3px 5px 5px 5px;
     }
-  }
-}
-
-// styling of bottom section
-.user-stream .child-actions {
-  margin-top: 8px;
-  .avatar-link {
-    float: none;
-  }
-  .fa {
-    width: 15px;
-    display: inline-block;
-    color: #777;
-  }
-  .avatar-wrapper {
-    border: none;
-  }
-  .avatar-link {
-    margin-right: 3px;
-
-  }
-}
-
-.avatar-selector {
-  label {
-    display: inline-block;
-    margin-right: 10px;
-  }
-  #avatar-input {
-    width: 0;
-    height: 0;
-    overflow: hidden;
-  }
-  .avatar {
-    margin: 5px 10px 5px 0;
+    .remove-bookmark {
+      float: right !important;
+      margin-top: -8px;
+    }
   }
 }

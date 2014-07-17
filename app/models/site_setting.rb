@@ -23,6 +23,11 @@ class SiteSetting < ActiveRecord::Base
     load_settings(file)
   end
 
+  client_settings << :available_locales
+
+  def self.available_locales
+    LocaleSiteSetting.values.map{ |e| e[:value] }.join('|')
+  end
 
   def self.call_discourse_hub?
     self.enforce_global_nicknames? && self.discourse_org_access_key.present?
@@ -56,36 +61,40 @@ class SiteSetting < ActiveRecord::Base
     @anonymous_menu_items ||= Set.new Discourse.anonymous_filters.map(&:to_s)
   end
 
+  def self.normalized_embeddable_host
+    return embeddable_host if embeddable_host.blank?
+    embeddable_host.sub(/^https?\:\/\//, '')
+  end
+
   def self.anonymous_homepage
     top_menu_items.map { |item| item.name }
                   .select { |item| anonymous_menu_items.include?(item) }
                   .first
   end
 
-  def self.authorized_uploads
-    authorized_extensions.tr(" ", "")
-                         .split("|")
-                         .map { |extension| (extension.start_with?(".") ? extension[1..-1] : extension).gsub(".", "\.") }
-  end
+  def self.should_download_images?(src)
+    setting = disabled_image_download_domains
+    return true unless setting.present?
 
-  def self.authorized_upload?(file)
-    authorized_uploads.count > 0 && file.original_filename =~ /\.(#{authorized_uploads.join("|")})$/i
-  end
-
-  def self.images
-    @images ||= Set.new ["jpg", "jpeg", "png", "gif", "tif", "tiff", "bmp"]
-  end
-
-  def self.authorized_images
-    authorized_uploads.select { |extension| images.include?(extension) }
-  end
-
-  def self.authorized_image?(file)
-    authorized_images.count > 0 && file.original_filename =~ /\.(#{authorized_images.join("|")})$/i
+    host = URI.parse(src).host
+    return !(setting.split('|').include?(host))
+  rescue URI::InvalidURIError
+    return true
   end
 
   def self.scheme
     use_https? ? "https" : "http"
+  end
+
+  def self.has_enough_topics_to_redirect_to_top
+    TopTopic.periods.each do |period|
+      topics_per_period = TopTopic.where("#{period}_score > 0")
+                                  .limit(SiteSetting.topics_per_period_in_top_page)
+                                  .count
+      return true if topics_per_period >= SiteSetting.topics_per_period_in_top_page
+    end
+    # nothing
+    false
   end
 
 end
@@ -98,7 +107,6 @@ end
 #  name       :string(255)      not null
 #  data_type  :integer          not null
 #  value      :text
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
+#  created_at :datetime
+#  updated_at :datetime
 #
-

@@ -23,6 +23,7 @@ class PostSerializer < BasicPostSerializer
              :topic_slug,
              :topic_id,
              :display_username,
+             :primary_group_name,
              :version,
              :can_edit,
              :can_delete,
@@ -35,6 +36,7 @@ class PostSerializer < BasicPostSerializer
              :raw,
              :actions_summary,
              :moderator?,
+             :admin?,
              :staff?,
              :user_id,
              :draft_sequence,
@@ -44,15 +46,21 @@ class PostSerializer < BasicPostSerializer
              :deleted_at,
              :deleted_by,
              :user_deleted,
-             :edit_reason
-
+             :edit_reason,
+             :can_view_edit_history,
+             :wiki,
+             :user_custom_fields
 
   def moderator?
-    object.user.try(:moderator?) || false
+    !!(object.user && object.user.moderator?)
+  end
+
+  def admin?
+    !!(object.user && object.user.admin?)
   end
 
   def staff?
-    object.user.try(:staff?) || false
+    !!(object.user && object.user.staff?)
   end
 
   def yours
@@ -73,6 +81,16 @@ class PostSerializer < BasicPostSerializer
 
   def display_username
     object.user.try(:name)
+  end
+
+  def primary_group_name
+    return nil unless object.user && object.user.primary_group_id
+
+    if @topic_view
+      @topic_view.primary_group_names[object.user.primary_group_id]
+    else
+      object.user.primary_group.name if object.user.primary_group
+    end
   end
 
   def link_counts
@@ -109,7 +127,8 @@ class PostSerializer < BasicPostSerializer
   def reply_to_user
     {
       username: object.reply_to_user.username,
-      avatar_template: object.reply_to_user.avatar_template
+      avatar_template: object.reply_to_user.avatar_template,
+      uploaded_avatar_id: object.reply_to_user.uploaded_avatar_id
     }
   end
 
@@ -169,7 +188,7 @@ class PostSerializer < BasicPostSerializer
   end
 
   def include_raw?
-    @add_raw.present?
+    @add_raw.present? && (!object.hidden || scope.user.try(:staff?) || yours)
   end
 
   def include_link_counts?
@@ -192,6 +211,20 @@ class PostSerializer < BasicPostSerializer
 
   def include_display_username?
     SiteSetting.enable_names?
+  end
+
+  def can_view_edit_history
+    scope.can_view_post_revisions?(object)
+  end
+
+  def user_custom_fields
+    @topic_view.user_custom_fields[object.user_id]
+  end
+
+  def include_user_custom_fields?
+    return if @topic_view.blank?
+    custom_fields = @topic_view.user_custom_fields
+    custom_fields && custom_fields[object.user_id]
   end
 
   private

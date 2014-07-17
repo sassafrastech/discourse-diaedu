@@ -14,6 +14,7 @@ describe ComposerMessagesFinder do
       finder.expects(:check_avatar_notification).once
       finder.expects(:check_sequential_replies).once
       finder.expects(:check_dominating_topic).once
+      finder.expects(:check_reviving_old_topic).once
       finder.find
     end
 
@@ -111,7 +112,7 @@ describe ComposerMessagesFinder do
       end
 
       it "doesn't return notifications for users who have custom avatars" do
-        user.user_stat.has_custom_avatar = true
+        user.uploaded_avatar_id = 1
         finder.check_avatar_notification.should be_blank
       end
 
@@ -232,12 +233,12 @@ describe ComposerMessagesFinder do
       end
 
       it "doesn't notify a user it has already notified in this topic" do
-        UserHistory.create!(action: UserHistory.actions[:notitied_about_dominating_topic], topic_id: topic.id, target_user_id: user.id )
+        UserHistory.create!(action: UserHistory.actions[:notified_about_dominating_topic], topic_id: topic.id, target_user_id: user.id )
         finder.check_dominating_topic.should be_blank
       end
 
       it "notifies a user if the topic is different" do
-        UserHistory.create!(action: UserHistory.actions[:notitied_about_dominating_topic], topic_id: topic.id+1, target_user_id: user.id )
+        UserHistory.create!(action: UserHistory.actions[:notified_about_dominating_topic], topic_id: topic.id+1, target_user_id: user.id )
         finder.check_dominating_topic.should be_present
       end
 
@@ -256,6 +257,11 @@ describe ComposerMessagesFinder do
         finder.check_dominating_topic.should be_blank
       end
 
+      it "doesn't notify you in a private message" do
+        topic.update_column(:archetype, Archetype.private_message)
+        finder.check_dominating_topic.should be_blank
+      end
+
       context "success" do
         let!(:message) { finder.check_dominating_topic }
 
@@ -263,13 +269,57 @@ describe ComposerMessagesFinder do
           message.should be_present
         end
 
-        it "creates a notitied_about_dominating_topic log" do
-          UserHistory.exists_for_user?(user, :notitied_about_dominating_topic).should be_true
+        it "creates a notified_about_dominating_topic log" do
+          UserHistory.exists_for_user?(user, :notified_about_dominating_topic).should be_true
         end
 
       end
     end
 
+  end
+
+  context '.check_reviving_old_topic' do
+    let(:user)  { Fabricate(:user) }
+    let(:topic) { Fabricate(:topic) }
+
+    it "does not give a message without a topic id" do
+      described_class.new(user, composerAction: 'createTopic').check_reviving_old_topic.should be_blank
+      described_class.new(user, composerAction: 'reply').check_reviving_old_topic.should be_blank
+    end
+
+    context "a reply" do
+      context "warn_reviving_old_topic_age is 180 days" do
+        before do
+          SiteSetting.stubs(:warn_reviving_old_topic_age).returns(180)
+        end
+
+        it "does not notify if last post is recent" do
+          topic = Fabricate(:topic, last_posted_at: 1.hour.ago)
+          described_class.new(user, composerAction: 'reply', topic_id: topic.id).check_reviving_old_topic.should be_blank
+        end
+
+        it "notifies if last post is old" do
+          topic = Fabricate(:topic, last_posted_at: 181.days.ago)
+          described_class.new(user, composerAction: 'reply', topic_id: topic.id).check_reviving_old_topic.should_not be_blank
+        end
+      end
+
+      context "warn_reviving_old_topic_age is 0" do
+        before do
+          SiteSetting.stubs(:warn_reviving_old_topic_age).returns(0)
+        end
+
+        it "does not notify if last post is new" do
+          topic = Fabricate(:topic, last_posted_at: 1.hour.ago)
+          described_class.new(user, composerAction: 'reply', topic_id: topic.id).check_reviving_old_topic.should be_blank
+        end
+
+        it "does not notify if last post is old" do
+          topic = Fabricate(:topic, last_posted_at: 365.days.ago)
+          described_class.new(user, composerAction: 'reply', topic_id: topic.id).check_reviving_old_topic.should be_blank
+        end
+      end
+    end
   end
 
 end

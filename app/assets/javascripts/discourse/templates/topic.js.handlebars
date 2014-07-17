@@ -1,4 +1,8 @@
-{{customHTML "top"}}
+<div class='container'>
+  {{custom-html "top"}}
+  {{Discourse.globalNotice}}
+  {{discourse-banner user=currentUser banner=Discourse.banner overlay=view.hasScrolled}}
+</div>
 
 {{#if postStream.loaded}}
 
@@ -12,21 +16,29 @@
           {{/if}}
 
           {{#if editingTopic}}
-            {{categoryChooser valueAttribute="id" value=newCategoryId source=category_id}}
-            {{textField id='edit-title' value=newTitle}}
+            {{#if isPrivateMessage}}
+              <span class="private-message-glyph"><i class='fa fa-envelope'></i></span>
+            {{else}}
+              {{category-chooser valueAttribute="id" value=newCategoryId source=category_id}}
+            {{/if}}
+            {{text-field id='edit-title' value=newTitle}}
 
-            <button class='btn btn-primary btn-small' {{action finishedEditingTopic}}><i class='fa fa-check'></i></button>
-            <button class='btn btn-small' {{action cancelEditingTopic}}><i class='fa fa-times'></i></button>
+            <button class='btn btn-primary btn-small no-text' {{action finishedEditingTopic}}><i class='fa fa-check'></i></button>
+            <button class='btn btn-small no-text' {{action cancelEditingTopic}}><i class='fa fa-times'></i></button>
           {{else}}
 
             {{! should be made into plugin later somehow}}
             {{render 'kb_link_to_kb_button'}}
 
             <h1>
-              {{boundCategoryLink category}}
+              <span class="private-message-glyph"><i class='fa fa-envelope'></i></span>
+              {{#if category.parentCategory}}
+                {{bound-category-link category.parentCategory}}
+              {{/if}}
+              {{bound-category-link category}}
               {{#if details.loaded}}
-                {{topicStatus topic=model}}
-                <a href='{{unbound url}}'>
+                {{topic-status topic=model}}
+                <a href='{{unbound url}}' {{action jumpTop}}>
                   {{#if topicSaving}}
                     {{fancy_title}}
                   {{else}}
@@ -41,6 +53,7 @@
               {{/if}}
             </h1>
           {{/if}}
+          {{plugin-outlet "topic-title"}}
         </div>
       </div>
     </div>
@@ -49,26 +62,28 @@
   <div class="container posts">
 
     {{view Discourse.SelectedPostsView}}
+
     <div class="row">
       <section class="topic-area" id='topic' data-topic-id='{{unbound id}}'>
         <div class='posts-wrapper'>
-          <div id='topic-progress-wrapper' {{bind-attr class="dockedCounter:docked"}}>
-            <nav id='topic-progress' title="{{i18n topic.progress.title}}" {{bind-attr class="hideProgress:hidden"}}>
-              <button id='jump-top' title="{{i18n topic.progress.jump_top}}" {{bind-attr disabled="jumpTopDisabled"}} {{action jumpTop}}><i class="fa fa-arrow-circle-up"></i></button>
-              <div class='nums' {{bind-attr title="progressPositionTitle"}}>
-                <h4>{{progressPosition}}</h4><span {{bind-attr class="hugeNumberOfPosts:hidden"}}> <span>{{i18n of_value}}</span> <h4>{{postStream.filteredPostsCount}}</h4></span>
-              </div>
-              <button id='jump-bottom' {{bind-attr title="jumpToBottomTitle"}} {{bind-attr disabled="jumpBottomDisabled"}} {{action jumpBottom}}><i class="fa fa-arrow-circle-down"></i></button>
-              <div class='bg'>&nbsp;</div>
-            </nav>
-          </div>
+
+          {{render 'topic-progress'}}
 
           {{#if postStream.loadingAbove}}
             <div class='spinner'>{{i18n loading}}</div>
           {{/if}}
 
           {{#unless postStream.loadingFilter}}
-            {{cloaked-collection cloakView="post" idProperty="post_number" defaultHeight="200" content=postStream.posts slackRatio=slackRatio loadingHTML=controller.loadingHTML}}
+            {{cloaked-collection cloakView="post"
+                                 idProperty="post_number"
+                                 defaultHeight="200"
+                                 content=postStream.posts
+                                 slackRatio="15"
+                                 loadingHTML=controller.loadingHTML
+                                 preservesContext="true"
+                                 uncloakDefault="true"
+                                 offsetFixedTop="header"
+                                 offsetFixedBottom="#reply-control"}}
           {{/unless}}
 
           {{#if postStream.loadingBelow}}
@@ -82,8 +97,8 @@
         {{else}}
           {{#if postStream.loadedAllPosts}}
 
-            {{view Discourse.TopicClosingView topicBinding="model"}}
-            {{view Discourse.TopicFooterButtonsView topicBinding="model"}}
+            {{view 'topic-closing' topic=model}}
+            {{view 'topic-footer-buttons' topic=model}}
 
             {{#if details.suggested_topics.length}}
               <div id='suggested-topics'>
@@ -91,7 +106,6 @@
                 <div class='topics'>
                   {{basic-topic-list topics=details.suggested_topics}}
                 </div>
-                <br/>
                 <h3>{{{view.browseMoreMessage}}}</h3>
               </div>
             {{/if}}
@@ -107,16 +121,20 @@
 {{else}}
   {{#if hasError}}
     <div class='container'>
-      {{#if errorBodyHtml}}
+      <div class="topic-error">
         {{{errorBodyHtml}}}
-      {{/if}}
 
-      {{#if message}}
-        <div class="message">
-          <h2>{{message}}</h2>
-        </div>
+        {{#if message}}
+          {{message}}
+          {{#unless currentUser}}
+            <button {{action showLogin}} class='btn btn-primary btn-small'><i class="fa fa-user"></i>{{i18n log_in}}</button>
+          {{/unless}}
+        {{/if}}
+        <button class="btn btn-primary topic-retry" {{action retryLoading}}>{{i18n errors.buttons.again}}</button>
+      </div>
+      {{#if retrying}}
+        <div class='spinner'>{{i18n loading}}</div>
       {{/if}}
-
     </div>
   {{else}}
     <div class='container'>
@@ -125,15 +143,13 @@
   {{/if}}
 {{/if}}
 
-{{render share}}
-{{render posterExpansion}}
+{{render "share"}}
+{{render "posterExpansion"}}
 
 {{#if currentUser.enable_quoting}}
-  {{render quoteButton}}
+  {{render "quote-button"}}
 {{/if}}
 
-{{#if currentUser.staff}}
-  {{render topicAdminMenu content}}
+{{#if currentUser.canManageTopic}}
+  {{render "topicAdminMenu" content}}
 {{/if}}
-
-{{customHTML "bottom"}}

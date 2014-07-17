@@ -1,6 +1,10 @@
 // styles that apply to the user page
-@import "common/foundation/variables";
-@import "common/foundation/mixins";
+
+.groups {
+  .group-link {
+    color: $tertiary;
+  }
+}
 
 .user-preferences {
   input.category-group {
@@ -35,33 +39,36 @@
     }
   }
 
+  .bio-composer #wmd-quote-post {
+    display: none;
+  }
+
   .static {
-    color: $black;
-    margin-top: 5px;
-    margin-left: 5px;
+    color: $primary;
     display: inline-block;
   }
   .instructions {
-    color: $dark_gray;
+    color: scale-color($primary, $lightness: 50%);
     margin-left: 160px;
     margin-top: 5px;
     margin-bottom: 10px;
+    font-size: 80%;
+    line-height: 1.4em;
   }
   .avatar {
     margin-left: 3px;
   }
   .instructions a[href] {
-    color: $darkish_gray;
+    color: $tertiary;
   }
   .warning {
-    background-color: lighten($red, 10%);
+    background-color: scale-color($danger, $lightness: 30%);
     padding: 5px 8px;
-    color: $white;
+    color: $secondary;
     width: 520px;
   }
 
   .other .controls {
-    margin-top: 10px;
     select {
       width: 280px;
     }
@@ -69,57 +76,53 @@
 }
 
 .user-navigation {
-  width: 240px;
-  margin-right: 20px;
+  width: 21.62%;
+  margin-right: 1.8018%;
   float: left;
 
   h3 {
-    color: #666;
+    color: $primary;
     margin: 20px 0 10px 0;
   }
 
-  .map {
-    height: 50px;
-  }
-  .avatar {
-    float: left;
-    width: 45px;
-  }
-  nav.buttons {
-    width: 180px;
-    padding: 0;
-    .btn {
-      width: 100%;
-      margin-bottom: 5px;
-      @include box-sizing(border-box);
-    }
-  }
-  h2 {
-    a {
-      font-size: 14px;
-      color: #999999;
-      cursor: pointer;
-    }
-  }
 }
 
 .user-main {
-  width: 850px;
+
+  width: 76.5765%;
   float: left;
   margin-bottom: 50px;
 
-  @include medium-width {
-    width: 735px;
-  }
 
-  @include small-width {
-    width: 680px;
+  table.group-members {
+    width: 100%;
+    p {
+      max-width: 600px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    th.seen {
+      text-align: right;
+    }
+    td.avatar {
+      width: 60px;
+    }
+    td {
+      img {
+        margin-right: 10px;
+      }
+      span.last-seen-at {
+        float: right;
+        color: $primary;
+      }
+    }
   }
 
   .user-content {
     padding: 10px 8px;
-    background-color: white;
-    border: 1px solid #ddd;
+    background-color: $secondary;
+    border: 1px solid scale-color-diff();
     margin-bottom: 10px;
 
     .btn.right {
@@ -136,22 +139,25 @@
 
       th {
         text-align: left;
-        border-bottom: 1px solid #aaa;
+        border-bottom: 1px solid scale-color-diff();
         padding: 5px;
       }
 
       td {
         padding: 5px;
-        border-bottom: 1px solid #ddd;
+        border-bottom: 1px solid scale-color-diff();
       }
     }
   }
 
   .about {
-    background-color: #444;
+    background-color: $primary;
+    background-size: cover;
+    background-position: center center;
+
     margin-bottom: 10px;
     overflow: hidden;
-    color: #fff;
+    color: $secondary;
 
 
     .details {
@@ -168,34 +174,48 @@
         font-size: 20px;
         margin-bottom: 6px;
         font-weight: normal;
+        margin-top: 5px;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       a[href] {
-        color: #fff;
+        color: $secondary;
       }
 
       img.avatar {
-        border: 3px solid #eee;
-        margin-bottom: 4px;
-        background-color: white;
+        margin-bottom: 10px;
       }
 
       .suspended {
-        color: #f77;
+        color: $danger;
       }
 
       .primary {
-        margin-top: 20px;
+        position: relative;
         float: left;
-        width: 75%;
+        width: 71%;
+        color: $secondary;
+        text-shadow: rgba(0, 0, 0, 0.5) 0 1px 1px;
 
-        h1, h2 {margin-top: 10px;}
+        h1, h2 {font-weight: bold;}
 
         .bio {
-          color: #ddd;
+          color: $secondary;
+          text-shadow: rgba(0, 0, 0, 0.5) 0 1px 1px;
+          max-height: 300px;
+          overflow: auto;
 
           a[href] {
-            color: #aae;
+            color: $secondary;
+            text-decoration: underline;
+            text-shadow: rgba(0, 0, 0, 0.5) 0 1px 1px;
+          }
+
+          img {
+            max-width: 100%;
           }
         }
 
@@ -203,26 +223,25 @@
 
       .secondary {
         float: right;
-        background-color: #222;
+        background-color: rgba(scale-color($primary, $lightness: 20%), .9);
         text-align: right;
         padding: 0 10px;
-        width: 20%;
+        max-width: 20%;
 
         dd {
-          color: white;
           margin: 0 0 7px 0;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         dt {
-          color: #aaa;
+          color: rgba($secondary, .7);
           margin: 0;
         }
       }
     }
 
     .controls {
-      background-color: #ddd;
+      background-color: scale-color($primary, $lightness: 30%);
       padding: 12px;
       height: 30px;
 
@@ -238,6 +257,10 @@
       margin-top: 0;
     }
 
+    .staff-counters {
+      display: none;
+    }
+
     .details {
       .secondary { display: none; }
       .bio { display: none; }
@@ -250,7 +273,6 @@
         .avatar {
           float: left;
           margin-right: 10px;
-          border: 2px solid white;
           width: 45px;
           height: 45px;
         }
@@ -269,90 +291,100 @@
     }
   }
 
+
   .user-stream {
     .excerpt {
-      margin: 5px 0px;
+      margin: 5px 0;
       font-size: 13px;
       word-wrap: break-word;
-      color: lighten($black, 30%);
+      color: $primary;
     }
     .item.moderator-action {
-      background-color: #eef0ff;
+      background-color:  scale-color($highlight, $lightness: 50%);
     }
     .item.deleted {
       opacity: 0.8;
-      background-color: #ffcece;
+      background-color: scale-color($danger, $lightness: 50%);
     }
     .item.hidden {
       display: block;
       opacity: 0.4;
     }
     .item {
-      padding: 10px 8px;
-      background-color: white;
-      border: 1px solid #ddd;
-      margin-bottom: 10px;
+      padding: 20px 8px 15px 8px;
+      background-color: $secondary;
+      border-bottom: 1px solid scale-color-diff();
     }
     .type {
-      color: lighten($black, 40%);
+      color: $primary;
     }
     span.name {
-      color: lighten($black, 40%);
+      color: $primary;
     }
     .time {
       display: block;
       float: right;
-      color: silver;
+      color: $primary;
       margin-right: 8px;
       font-size: 11px;
     }
     .avatar-link {
       float: left;
-      margin-right: 10px;
+      margin-right: 4px;
     }
     .title {
       display: block;
-      margin-bottom: 4px;
       font-size: 14px;
+      max-width: 80%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .name {
+      display: block;
+      font-size: 14px;
+      max-width: 400px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .edit-reason {
-      background-color: #ffffcc;
+      background-color: scale-color($highlight, $lightness: 25%);
       padding: 3px 5px 5px 5px;
     }
+    .remove-bookmark {
+      float: right;
+      margin-top: -4px;
+    }
   }
-}
 
-// styling of bottom section
-.user-stream .child-actions {
-  margin-top: 8px;
-  .avatar-link {
-    float: none;
+  .staff-counters {
+    text-align: left;
+    position: absolute;
+    > div {
+      margin-bottom: 10px;
+    }
   }
-  .fa {
-    width: 15px;
+
+  .pill {
+    border-radius: 15px;
     display: inline-block;
-    color: #777;
+    height: 30px;
+    width: 30px;
+    text-align: center;
+    vertical-align: middle;
+    line-height: 30px;
   }
-  .avatar-wrapper {
-    border: none;
+  .helpful-flags {
+    background-color: green;
   }
-  .avatar-link {
-    margin-right: 3px;
-
+  .flagged-posts {
+    background-color: #E49735;
   }
-}
-
-.avatar-selector {
-  label {
-    display: inline-block;
-    margin-right: 10px;
+  .deleted-posts {
+    background-color: #EC441B;
   }
-  #avatar-input {
-    width: 0;
-    height: 0;
-    overflow: hidden;
-  }
-  .avatar {
-    margin: 5px 10px 5px 0;
+  .suspensions {
+    background-color: #c22020;
   }
 }

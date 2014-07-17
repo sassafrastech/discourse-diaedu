@@ -12,7 +12,7 @@ If you don't already have a Ruby environment that's tuned to your liking, you ca
 
 1. Install XCode and/or the XCode Command Line Tools from [Apple's developer site](https://developer.apple.com/downloads/index.action). This should also install Git.
 2. Clone the Discourse repo and cd into it.
-3. Run `scripts/osx_dev`.
+3. Run `script/osx_dev`.
 4. Review `log/osx_dev.log` to make sure everything finished successfully.
 
 Of course, it is good to understand what the script is doing and why. The rest of this guide goes through what's happening.
@@ -101,7 +101,29 @@ OS X ships with Postgres 9.1.5, but you're better off going with the latest from
 
 ### Using Postgres.app
 
-[Instructions pending]
+After installing the [Postgres93 App](http://postgresapp.com/), there is some additional setup that is necessary for discourse to create a database on your machine.
+
+Open this file:
+```
+~/Library/Application Support/Postgres93/var/postgresql.conf
+```
+And change these two lines so that postgres will create a socket in the folder discourse expects it to:
+```
+unix_socket_directories = '/var/pgsql_socket'»# comma-separated list of directories
+#and
+unix_socket_permissions = 0777»·»·# begin with 0 to use octal notation
+```
+Then create the '/var/pgsql/' folder and set up the appropriate permission in your bash (this requires admin access)
+```
+sudo mkdir /var/pgsql_socket
+sudo chmod 770 /var/pgsql_socket
+sudo chown root:staff /var/pgsql_socket
+```
+Now you can restart Postgres.app and it will use this socket. Make sure you not only restart the app but kill any processes that may be left behind. You can view these processes with this bash command:
+```
+netstat -ln | grep PGSQL
+```
+And you should be good to go!
 
 ### Using Homebrew:
 
@@ -145,18 +167,29 @@ Homebrew loves you.
 
     brew install phantomjs
 
+## ImageMagick
+
+ImageMagick is used for generating avatars (including for test fixtures).
+
+    brew install imagemagick
+
+## Sending email (SMTP)
+
+By default, development.rb will attempt to connect locally to send email.
+
+```rb
+config.action_mailer.smtp_settings = { address: "localhost", port: 1025 }
+```
+
+Set up [MailCatcher](https://github.com/sj26/mailcatcher) so the app can intercept
+outbound email and you can verify what is being sent.
+
 ## Setting up your Discourse
 
 ###  Check out the repository
 
     git@github.com:discourse/discourse.git ~/discourse
     cd ~/discourse # Navigate into the repository, and stay there for the rest of this how-to
-
-### Loading seed data
-
-From the discource source tree:
-
-    psql -d discourse_development < pg_dumps/development-image.sql
 
 ### What about the config files?
 

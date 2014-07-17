@@ -6,6 +6,7 @@ class ComposerMessagesFinder
   end
 
   def find
+    check_reviving_old_topic ||
     check_education_message ||
     check_new_user_many_replies ||
     check_avatar_notification ||
@@ -46,7 +47,7 @@ class ComposerMessagesFinder
     return unless @user.has_trust_level?(:basic)
 
     # We don't notify users who have avatars or who have been notified already.
-    return if @user.user_stat.has_custom_avatar? || UserHistory.exists_for_user?(@user, :notified_about_avatar)
+    return if @user.uploaded_avatar_id || UserHistory.exists_for_user?(@user, :notified_about_avatar)
 
     # Finally, we don't check users whose avatars haven't been examined
     return unless UserHistory.exists_for_user?(@user, :checked_for_custom_avatar)
@@ -88,6 +89,7 @@ class ComposerMessagesFinder
 
     {templateName: 'composer/education',
      wait_for_typing: true,
+     extraClass: 'urgent',
      body: PrettyText.cook(I18n.t('education.sequential_replies')) }
   end
 
@@ -97,12 +99,13 @@ class ComposerMessagesFinder
     return unless replying? &&
                   @details[:topic_id] &&
                   (@user.post_count >= SiteSetting.educate_until_posts) &&
-                  !UserHistory.exists_for_user?(@user, :notitied_about_dominating_topic, topic_id: @details[:topic_id])
+                  !UserHistory.exists_for_user?(@user, :notified_about_dominating_topic, topic_id: @details[:topic_id])
 
-    topic = Topic.where(id: @details[:topic_id]).first
+    topic = Topic.find_by(id: @details[:topic_id])
     return if topic.blank? ||
               topic.user_id == @user.id ||
-              topic.posts_count < SiteSetting.summary_posts_required
+              topic.posts_count < SiteSetting.summary_posts_required ||
+              topic.archetype == Archetype.private_message
 
     posts_by_user = @user.posts.where(topic_id: topic.id).count
 
@@ -110,14 +113,33 @@ class ComposerMessagesFinder
     return if ratio < (SiteSetting.dominating_topic_minimum_percent.to_f / 100.0)
 
     # Log the topic notification
-    UserHistory.create!(action: UserHistory.actions[:notitied_about_dominating_topic],
+    UserHistory.create!(action: UserHistory.actions[:notified_about_dominating_topic],
                         target_user_id: @user.id,
                         topic_id: @details[:topic_id])
 
 
     {templateName: 'composer/education',
      wait_for_typing: true,
+     extraClass: 'urgent',
      body: PrettyText.cook(I18n.t('education.dominating_topic', percent: (ratio * 100).round)) }
+  end
+
+  def check_reviving_old_topic
+    return unless @details[:topic_id]
+
+    topic = Topic.find_by(id: @details[:topic_id])
+
+    return unless replying?
+
+    return if topic.nil? ||
+              SiteSetting.warn_reviving_old_topic_age < 1 ||
+              topic.last_posted_at.nil? ||
+              topic.last_posted_at > SiteSetting.warn_reviving_old_topic_age.days.ago
+
+    {templateName: 'composer/education',
+     wait_for_typing: false,
+     extraClass: 'urgent',
+     body: PrettyText.cook(I18n.t('education.reviving_old_topic', days: (Time.zone.now - topic.last_posted_at).round / 1.day)) }
   end
 
   private

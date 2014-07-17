@@ -3,41 +3,6 @@ require_dependency 'user'
 
 describe User do
 
-  it { should have_many(:posts) }
-  it { should have_many(:notifications).dependent(:destroy) }
-  it { should have_many(:topic_users).dependent(:destroy) }
-  it { should have_many(:topics) }
-  it { should have_many(:user_open_ids).dependent(:destroy) }
-  it { should have_many(:user_actions).dependent(:destroy) }
-  it { should have_many(:post_actions).dependent(:destroy) }
-  it { should have_many(:email_logs).dependent(:destroy) }
-  it { should have_many(:post_timings) }
-  it { should have_many(:topic_allowed_users).dependent(:destroy) }
-  it { should have_many(:topics_allowed) }
-  it { should have_many(:email_tokens).dependent(:destroy) }
-  it { should have_many(:views) }
-  it { should have_many(:user_visits).dependent(:destroy) }
-  it { should have_many(:invites).dependent(:destroy) }
-  it { should have_many(:topic_links).dependent(:destroy) }
-  it { should have_many(:uploads) }
-
-  it { should have_one(:facebook_user_info).dependent(:destroy) }
-  it { should have_one(:twitter_user_info).dependent(:destroy) }
-  it { should have_one(:github_user_info).dependent(:destroy) }
-  it { should have_one(:cas_user_info).dependent(:destroy) }
-  it { should have_one(:oauth2_user_info).dependent(:destroy) }
-  it { should have_one(:user_stat).dependent(:destroy) }
-  it { should belong_to(:approved_by) }
-
-  it { should have_many(:group_users).dependent(:destroy) }
-  it { should have_many(:groups) }
-  it { should have_many(:secure_categories) }
-
-  it { should have_one(:user_search_data).dependent(:destroy) }
-  it { should have_one(:api_key).dependent(:destroy) }
-
-  it { should belong_to(:uploaded_avatar).dependent(:destroy) }
-
   it { should validate_presence_of :username }
   it { should validate_presence_of :email }
 
@@ -176,6 +141,32 @@ describe User do
       end
     end
 
+    describe 'allow custom minimum username length from site settings' do
+      before do
+        @custom_min = User::GLOBAL_USERNAME_LENGTH_RANGE.begin - 1
+        SiteSetting.min_username_length = @custom_min
+      end
+
+      it 'should allow a shorter username than default' do
+        result = user.change_username('a' * @custom_min)
+        result.should_not be_false
+      end
+
+      it 'should not allow a shorter username than limit' do
+        result = user.change_username('a' * (@custom_min - 1))
+        result.should be_false
+      end
+
+      it 'should not allow a longer username than limit' do
+        result = user.change_username('a' * (User.username_length.end + 1))
+        result.should be_false
+      end
+
+      it 'should use default length for validation if enforce_global_nicknames is true' do
+        SiteSetting.enforce_global_nicknames = true
+        User::username_length.should == User::GLOBAL_USERNAME_LENGTH_RANGE
+      end
+    end
   end
 
   describe 'delete posts' do
@@ -193,7 +184,7 @@ describe User do
       expect(Post.where(id: @posts.map(&:id))).to be_empty
       @posts.each do |p|
         if p.post_number == 1
-          expect(Topic.where(id: p.topic_id).first).to be_nil
+          expect(Topic.find_by(id: p.topic_id)).to be_nil
         end
       end
     end
@@ -250,8 +241,6 @@ describe User do
       end
 
       its(:email_tokens) { should be_present }
-      its(:bio_cooked) { should be_present }
-      its(:bio_summary) { should be_present }
     end
   end
 
@@ -423,7 +412,7 @@ describe User do
   end
 
   describe 'username format' do
-    it "should always be 3 chars or longer" do
+    it "should be #{SiteSetting.min_username_length} chars or longer" do
       @user = Fabricate.build(:user)
       @user.username = 'ss'
       @user.save.should == false
@@ -574,21 +563,6 @@ describe User do
     end
   end
 
-  describe 'changing bio' do
-    let(:user) { Fabricate(:user) }
-
-    before do
-      user.bio_raw = "**turtle power!**"
-      user.save
-      user.reload
-    end
-
-    it "should markdown the raw_bio and put it in cooked_bio" do
-      user.bio_cooked.should == "<p><strong>turtle power!</strong></p>"
-    end
-
-  end
-
   describe "previous_visit_at" do
 
     let(:user) { Fabricate(:user) }
@@ -712,7 +686,7 @@ describe User do
 
     context 'when email has been confirmed' do
       it 'should return true' do
-        token = user.email_tokens.where(email: user.email).first
+        token = user.email_tokens.find_by(email: user.email)
         EmailToken.confirm(token.token)
         user.email_confirmed?.should be_true
       end
@@ -749,53 +723,6 @@ describe User do
       # It doesn't raise an exception if called again
       user.flag_linked_posts_as_spam
 
-    end
-
-  end
-
-  describe "bio link stripping" do
-
-    it "returns an empty string with no bio" do
-      expect(Fabricate.build(:user).bio_excerpt).to be_blank
-    end
-
-    context "with a user that has a link in their bio" do
-      let(:user) { Fabricate.build(:user, bio_raw: "im sissy and i love http://ponycorns.com") }
-
-      it "includes the link as nofollow if the user is not new" do
-        user.send(:cook)
-        expect(user.bio_excerpt).to eq("im sissy and i love <a href='http://ponycorns.com' rel='nofollow'>http://ponycorns.com</a>")
-        expect(user.bio_processed).to eq("<p>im sissy and i love <a href=\"http://ponycorns.com\" rel=\"nofollow\">http://ponycorns.com</a></p>")
-      end
-
-      it "removes the link if the user is new" do
-        user.trust_level = TrustLevel.levels[:newuser]
-        user.send(:cook)
-        expect(user.bio_excerpt).to eq("im sissy and i love http://ponycorns.com")
-        expect(user.bio_processed).to eq("<p>im sissy and i love http://ponycorns.com</p>")
-      end
-
-      it "includes the link without nofollow if the user is trust level 3 or higher" do
-        user.trust_level = TrustLevel.levels[:leader]
-        user.send(:cook)
-        expect(user.bio_excerpt).to eq("im sissy and i love <a href='http://ponycorns.com'>http://ponycorns.com</a>")
-        expect(user.bio_processed).to eq("<p>im sissy and i love <a href=\"http://ponycorns.com\">http://ponycorns.com</a></p>")
-      end
-
-      it "removes nofollow from links in bio when trust level is increased" do
-        user.save
-        user.change_trust_level!(:leader)
-        expect(user.bio_excerpt).to eq("im sissy and i love <a href='http://ponycorns.com'>http://ponycorns.com</a>")
-        expect(user.bio_processed).to eq("<p>im sissy and i love <a href=\"http://ponycorns.com\">http://ponycorns.com</a></p>")
-      end
-
-      it "adds nofollow to links in bio when trust level is decreased" do
-        user.trust_level = TrustLevel.levels[:leader]
-        user.save
-        user.change_trust_level!(:regular)
-        expect(user.bio_excerpt).to eq("im sissy and i love <a href='http://ponycorns.com' rel='nofollow'>http://ponycorns.com</a>")
-        expect(user.bio_processed).to eq("<p>im sissy and i love <a href=\"http://ponycorns.com\" rel=\"nofollow\">http://ponycorns.com</a></p>")
-      end
     end
 
   end
@@ -860,15 +787,6 @@ describe User do
       it "returns true" do
         expect(user).to be_added_a_day_ago
       end
-    end
-  end
-
-  describe "#upload_avatar" do
-    let(:upload) { Fabricate(:upload) }
-    let(:user)   { Fabricate(:user) }
-
-    it "should update user's avatar" do
-      expect(user.upload_avatar(upload)).to be_true
     end
   end
 
@@ -942,6 +860,16 @@ describe User do
       it "returns true when the user has posted too much" do
         user.posted_too_much_in_topic?(topic.id).should be_true
       end
+
+      context "with a reply" do
+        before do
+          PostCreator.new(Fabricate(:user), raw: 'whatever this is a raw post', topic_id: topic.id, reply_to_post_number: post.post_number).create
+        end
+
+        it "resets the `posted_too_much` threshold" do
+          user.posted_too_much_in_topic?(topic.id).should be_false
+        end
+      end
     end
 
     it "returns false for a user who created the topic" do
@@ -983,49 +911,226 @@ describe User do
 
   describe ".small_avatar_url" do
 
-    let(:user) { build(:user, use_uploaded_avatar: true, uploaded_avatar_template: "/uploaded/avatar/template/{size}.png") }
+    let(:user) { build(:user, username: 'Sam') }
 
     it "returns a 45-pixel-wide avatar" do
-      user.small_avatar_url.should == "//test.localhost/uploaded/avatar/template/45.png"
+      user.small_avatar_url.should == "//test.localhost/letter_avatar/sam/45/#{LetterAvatar::VERSION}.png"
     end
 
   end
 
-  describe ".uploaded_avatar_path" do
+  describe ".avatar_template_url" do
 
-    let(:user) { build(:user, use_uploaded_avatar: true, uploaded_avatar_template: "/uploaded/avatar/template/{size}.png") }
+    let(:user) { build(:user, uploaded_avatar_id: 99, username: 'Sam') }
 
-    it "returns nothing when uploaded avatars are not allowed" do
-      SiteSetting.expects(:allow_uploaded_avatars).returns(false)
-      user.uploaded_avatar_path.should be_nil
-    end
-
-    it "returns a schemaless avatar template" do
-      user.uploaded_avatar_path.should == "//test.localhost/uploaded/avatar/template/{size}.png"
+    it "returns a schemaless avatar template with correct id" do
+      user.avatar_template_url.should == "//test.localhost/user_avatar/test.localhost/sam/{size}/99.png"
     end
 
     it "returns a schemaless cdn-based avatar template" do
       Rails.configuration.action_controller.stubs(:asset_host).returns("http://my.cdn.com")
-      user.uploaded_avatar_path.should == "//my.cdn.com/uploaded/avatar/template/{size}.png"
+      user.avatar_template_url.should == "//my.cdn.com/user_avatar/test.localhost/sam/{size}/99.png"
     end
 
   end
 
-  describe ".avatar_template" do
+  describe "update_posts_read!" do
+    context "with a UserVisit record" do
+      let!(:user) { Fabricate(:user) }
+      let!(:now)  { Time.zone.now }
+      before { user.update_last_seen!(now) }
 
-    let(:user) { build(:user, email: "em@il.com") }
+      it "with existing UserVisit record, increments the posts_read value" do
+        expect {
+          user_visit = user.update_posts_read!(2)
+          user_visit.posts_read.should == 2
+        }.to_not change { UserVisit.count }
+      end
 
-    it "returns the uploaded_avatar_path by default" do
-      user.expects(:uploaded_avatar_path).returns("//discourse.org/uploaded/avatar.png")
-      user.avatar_template.should == "//discourse.org/uploaded/avatar.png"
+      it "with no existing UserVisit record, creates a new UserVisit record and increments the posts_read count" do
+        expect {
+          user_visit = user.update_posts_read!(3, 5.days.ago)
+          user_visit.posts_read.should == 3
+        }.to change { UserVisit.count }.by(1)
+      end
+    end
+  end
+
+  describe "primary_group_id" do
+    let!(:user) { Fabricate(:user) }
+
+    it "has no primary_group_id by default" do
+      user.primary_group_id.should be_nil
     end
 
-    it "returns the gravatar when no avatar has been uploaded" do
-      user.expects(:uploaded_avatar_path)
-      User.expects(:gravatar_template).with(user.email).returns("//gravatar.com/avatar.png")
-      user.avatar_template.should == "//gravatar.com/avatar.png"
+    context "when the user has a group" do
+      let!(:group) { Fabricate(:group) }
+
+      before do
+        group.usernames = user.username
+        group.save
+        user.primary_group_id = group.id
+        user.save
+        user.reload
+      end
+
+      it "should allow us to use it as a primary group" do
+        user.primary_group_id.should == group.id
+
+        # If we remove the user from the group
+        group.usernames = ""
+        group.save
+
+        # It should unset it from the primary_group_id
+        user.reload
+        user.primary_group_id.should be_nil
+      end
+    end
+  end
+
+  describe "should_be_redirected_to_top" do
+    let!(:user) { Fabricate(:user) }
+
+    it "should be redirected to top when there is a reason to" do
+      user.expects(:redirected_to_top_reason).returns("42")
+      user.should_be_redirected_to_top.should == true
     end
 
+    it "should not be redirected to top when there is no reason to" do
+      user.expects(:redirected_to_top_reason).returns(nil)
+      user.should_be_redirected_to_top.should == false
+    end
+
+  end
+
+  describe ".redirected_to_top_reason" do
+    let!(:user) { Fabricate(:user) }
+
+    it "should have no reason when `SiteSetting.redirect_users_to_top_page` is disabled" do
+      SiteSetting.expects(:redirect_users_to_top_page).returns(false)
+      user.redirected_to_top_reason.should == nil
+    end
+
+    context "when `SiteSetting.redirect_users_to_top_page` is enabled" do
+      before { SiteSetting.expects(:redirect_users_to_top_page).returns(true) }
+
+      it "should have no reason when top is not in the `SiteSetting.top_menu`" do
+        SiteSetting.expects(:top_menu).returns("latest")
+        user.redirected_to_top_reason.should == nil
+      end
+
+      context "and when top is in the `SiteSetting.top_menu`" do
+        before { SiteSetting.expects(:top_menu).returns("latest|top") }
+
+        it "should have no reason when there aren't enough topics" do
+          SiteSetting.expects(:has_enough_topics_to_redirect_to_top).returns(false)
+          user.redirected_to_top_reason.should == nil
+        end
+
+        context "and when there are enough topics" do
+          before { SiteSetting.expects(:has_enough_topics_to_redirect_to_top).returns(true) }
+
+          describe "a new user" do
+            before do
+              user.stubs(:trust_level).returns(0)
+              user.stubs(:last_seen_at).returns(5.minutes.ago)
+            end
+
+            it "should have a reason for the first visit" do
+              user.expects(:last_redirected_to_top_at).returns(nil)
+              user.expects(:update_last_redirected_to_top!).once
+
+              user.redirected_to_top_reason.should == I18n.t('redirected_to_top_reasons.new_user')
+            end
+
+            it "should not have a reason for next visits" do
+              user.expects(:last_redirected_to_top_at).returns(10.minutes.ago)
+              user.expects(:update_last_redirected_to_top!).never
+
+              user.redirected_to_top_reason.should == nil
+            end
+          end
+
+          describe "an older user" do
+            before { user.stubs(:trust_level).returns(1) }
+
+            it "should have a reason when the user hasn't been seen in a month" do
+              user.last_seen_at = 2.months.ago
+              user.expects(:update_last_redirected_to_top!).once
+
+              user.redirected_to_top_reason.should == I18n.t('redirected_to_top_reasons.not_seen_in_a_month')
+            end
+          end
+
+        end
+
+      end
+
+    end
+
+  end
+
+  describe "automatic avatar creation" do
+    it "sets a system avatar for new users" do
+      SiteSetting.enable_system_avatars = true
+      u = User.create!(username: "bob", email: "bob@bob.com")
+      u.reload
+      u.uploaded_avatar_id.should == nil
+      u.avatar_template.should == "/letter_avatar/bob/{size}/#{LetterAvatar::VERSION}.png"
+    end
+  end
+
+  describe "custom fields" do
+    it "allows modification of custom fields" do
+      user = Fabricate(:user)
+
+      user.custom_fields["a"].should == nil
+
+      user.custom_fields["bob"] = "marley"
+      user.custom_fields["jack"] = "black"
+      user.save
+
+      user = User.find(user.id)
+
+      user.custom_fields["bob"].should == "marley"
+      user.custom_fields["jack"].should == "black"
+
+      user.custom_fields.delete("bob")
+      user.custom_fields["jack"] = "jill"
+
+      user.save
+      user = User.find(user.id)
+
+      user.custom_fields.should == {"jack" => "jill"}
+    end
+  end
+
+  describe "refresh_avatar" do
+    it "picks gravatar if system avatar is picked and gravatar was just downloaded" do
+
+      png = Base64.decode64("R0lGODlhAQABALMAAAAAAIAAAACAAICAAAAAgIAAgACAgMDAwICAgP8AAAD/AP//AAAA//8A/wD//wBiZCH5BAEAAA8ALAAAAAABAAEAAAQC8EUAOw==")
+      FakeWeb.register_uri( :get,
+                            "http://www.gravatar.com/avatar/d10ca8d11301c2f4993ac2279ce4b930.png?s=500&d=404",
+                             body: png )
+
+      user = User.create!(username: "bob", name: "bob", email: "a@a.com")
+      user.reload
+
+      SiteSetting.automatically_download_gravatars = true
+      SiteSetting.enable_system_avatars = true
+
+      user.refresh_avatar
+      user.reload
+
+      user.user_avatar.gravatar_upload_id.should == user.uploaded_avatar_id
+
+      user.uploaded_avatar_id = nil
+      user.save
+      user.refresh_avatar
+
+      user.reload
+      user.uploaded_avatar_id.should == nil
+    end
   end
 
 end

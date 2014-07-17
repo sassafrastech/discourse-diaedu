@@ -30,6 +30,7 @@ class UserNotifications < ActionMailer::Base
                  email_token: opts[:email_token])
   end
 
+
   def digest(user, opts={})
     @user = user
     @base_url = Discourse.base_url
@@ -41,15 +42,26 @@ class UserNotifications < ActionMailer::Base
     @last_seen_at = I18n.l(@user.last_seen_at || @user.created_at, format: :short)
 
     # A list of topics to show the user
-    @featured_topics = Topic.for_digest(user, min_date).to_a
+    @featured_topics = Topic.for_digest(user, min_date, limit: SiteSetting.digest_topics, top_order: true).to_a
 
     # Don't send email unless there is content in it
     if @featured_topics.present?
+      featured_topic_ids = @featured_topics.map(&:id)
+
+      @new_topics_since_seen = Topic.new_since_last_seen(user, min_date, featured_topic_ids).count
+      if @new_topics_since_seen > 1000
+        category_counts = Topic.new_since_last_seen(user, min_date, featured_topic_ids).group(:category_id).count
+
+        @new_by_category = []
+        if category_counts.present?
+          Category.where(id: category_counts.keys).each do |c|
+            @new_by_category << [c, category_counts[c.id]]
+          end
+          @new_by_category.sort_by! {|c| -c[1]}
+        end
+      end
+
       @featured_topics, @new_topics = @featured_topics[0..4], @featured_topics[5..-1]
-
-      # Sort the new topics by score
-      @new_topics.sort! {|a, b| (b.score || 0) - (a.score || 0) } if @new_topics.present?
-
       @markdown_linker = MarkdownLinker.new(Discourse.base_url)
 
       build_email user.email,
@@ -93,6 +105,17 @@ class UserNotifications < ActionMailer::Base
     notification_email(user, opts)
   end
 
+  def mailing_list_notify(user, post)
+    send_notification_email(
+      title: post.topic.title,
+      post: post,
+      from_alias: post.user.username,
+      allow_reply_by_email: true,
+      notification_type: "posted",
+      user: user
+    )
+  end
+
   protected
 
   def email_post_markdown(post)
@@ -107,25 +130,57 @@ class UserNotifications < ActionMailer::Base
     include UserNotificationsHelper
   end
 
+  def self.get_context_posts(post, topic_user)
+
+    context_posts = Post.where(topic_id: post.topic_id)
+                        .where("post_number < ?", post.post_number)
+                        .where(user_deleted: false)
+                        .where(hidden: false)
+                        .order('created_at desc')
+                        .limit(SiteSetting.email_posts_context)
+
+    if topic_user && topic_user.last_emailed_post_number
+      context_posts = context_posts.where("post_number > ?", topic_user.last_emailed_post_number)
+    end
+
+    context_posts
+  end
+
   def notification_email(user, opts)
     return unless @notification = opts[:notification]
     return unless @post = opts[:post]
 
-    username = @notification.data_hash[:display_username]
+    username = @notification.data_hash[:original_username]
     notification_type = opts[:notification_type] || Notification.types[@notification.notification_type].to_s
 
+    return if user.mailing_list_mode && !@post.topic.private_message? &&
+       ["replied", "mentioned", "quoted", "posted"].include?(notification_type)
+
+    title = @notification.data_hash[:topic_title]
+    allow_reply_by_email = opts[:allow_reply_by_email] unless user.suspended?
+
+    send_notification_email(
+      title: title,
+      post: @post,
+      from_alias: username,
+      allow_reply_by_email: allow_reply_by_email,
+      notification_type: notification_type,
+      user: user
+    )
+
+  end
+
+  def send_notification_email(opts)
+    post = opts[:post]
+    title = opts[:title]
+    allow_reply_by_email = opts[:allow_reply_by_email]
+    from_alias = opts[:from_alias]
+    notification_type = opts[:notification_type]
+    user = opts[:user]
+
     context = ""
-    tu = TopicUser.get(@post.topic_id, user)
-
-    context_posts = Post.where(topic_id: @post.topic_id)
-                        .where("post_number < ?", @post.post_number)
-                        .where(user_deleted: false)
-                        .order('created_at desc')
-                        .limit(SiteSetting.email_posts_context)
-
-    if tu && tu.last_emailed_post_number
-      context_posts = context_posts.where("post_number > ?", tu.last_emailed_post_number)
-    end
+    tu = TopicUser.get(post.topic_id, user)
+    context_posts = self.class.get_context_posts(post, tu)
 
     # make .present? cheaper
     context_posts = context_posts.to_a
@@ -137,40 +192,43 @@ class UserNotifications < ActionMailer::Base
       end
     end
 
+    top = SiteContent.content_for(:notification_email_top)
+
     html = UserNotificationRenderer.new(Rails.configuration.paths["app/views"]).render(
       template: 'email/notification',
       format: :html,
-      locals: { context_posts: context_posts, post: @post }
+      locals: { context_posts: context_posts, post: post, top: top ? PrettyText.cook(top).html_safe : nil }
     )
 
     template = "user_notifications.user_#{notification_type}"
-    if @post.topic.private_message?
+    if post.topic.private_message?
       template << "_pm"
     end
 
     email_opts = {
-      topic_title: @notification.data_hash[:topic_title],
-      message: email_post_markdown(@post),
-      url: @post.url,
-      post_id: @post.id,
-      topic_id: @post.topic_id,
+      topic_title: title,
+      message: email_post_markdown(post),
+      url: post.url,
+      post_id: post.id,
+      topic_id: post.topic_id,
       context: context,
-      username: username,
+      username: from_alias,
       add_unsubscribe_link: true,
-      allow_reply_by_email: opts[:allow_reply_by_email],
+      allow_reply_by_email: allow_reply_by_email,
+      private_reply: post.topic.private_message?,
+      include_respond_instructions: !user.suspended?,
       template: template,
       html_override: html,
       style: :notification
     }
 
     # If we have a display name, change the from address
-    if username.present?
-      email_opts[:from_alias] = username
+    if from_alias.present?
+      email_opts[:from_alias] = from_alias
     end
 
-    TopicUser.change(user.id, @post.topic_id, last_emailed_post_number: @post.post_number)
+    TopicUser.change(user.id, post.topic_id, last_emailed_post_number: post.post_number)
 
     build_email(user.email, email_opts)
   end
-
 end

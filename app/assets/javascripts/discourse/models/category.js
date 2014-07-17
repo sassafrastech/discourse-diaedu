@@ -10,9 +10,11 @@ Discourse.Category = Discourse.Model.extend({
 
   init: function() {
     this._super();
-    this.set("availableGroups", Em.A(this.get("available_groups")));
+    var availableGroups = Em.A(this.get("available_groups"));
 
+    this.set("availableGroups", availableGroups);
     this.set("permissions", Em.A(_.map(this.group_permissions, function(elem){
+      availableGroups.removeObject(elem.group_name);
       return {
                 group_name: elem.group_name,
                 permission: Discourse.PermissionType.create({id: elem.permission_type})
@@ -62,12 +64,16 @@ Discourse.Category = Discourse.Model.extend({
         name: this.get('name'),
         color: this.get('color'),
         text_color: this.get('text_color'),
-        hotness: this.get('hotness'),
         secure: this.get('secure'),
         permissions: this.get('permissionsForUpdate'),
         auto_close_hours: this.get('auto_close_hours'),
         position: this.get('position'),
-        parent_category_id: this.get('parent_category_id')
+        email_in: this.get('email_in'),
+        email_in_allow_strangers: this.get('email_in_allow_strangers'),
+        parent_category_id: this.get('parent_category_id'),
+        logo_url: this.get('logo_url'),
+        background_url: this.get('background_url'),
+        allow_badges: this.get('allow_badges')
       },
       type: this.get('id') ? 'PUT' : 'POST'
     });
@@ -156,6 +162,17 @@ Discourse.Category = Discourse.Model.extend({
     return this.countStats('topics');
   }.property('posts_year', 'posts_month', 'posts_week', 'posts_day'),
 
+  setNotification: function(notification_level) {
+    var url = "/category/" + this.get('id')+"/notifications";
+    this.set('notification_level', notification_level);
+    return Discourse.ajax(url, {
+      data: {
+        notification_level: notification_level
+      },
+      type: 'POST'
+    });
+  },
+
   postCountStats: function() {
     return this.countStats('posts');
   }.property('posts_year', 'posts_month', 'posts_week', 'posts_day'),
@@ -176,6 +193,13 @@ Discourse.Category = Discourse.Model.extend({
 });
 
 Discourse.Category.reopenClass({
+
+  NotificationLevel: {
+    WATCHING: 3,
+    TRACKING: 2,
+    REGULAR: 1,
+    MUTED: 0
+  },
 
   slugFor: function(category) {
     if (!category) return "";
@@ -210,9 +234,14 @@ Discourse.Category.reopenClass({
   },
 
   findByIds: function(ids){
-    return ids.map(function(id){
-      return Discourse.Category.findById(id);
+    var categories = [];
+    _.each(ids, function(id){
+      var found = Discourse.Category.findById(id);
+      if(found){
+        categories.push(found);
+      }
     });
+    return categories;
   },
 
   findBySlug: function(slug, parentSlug) {

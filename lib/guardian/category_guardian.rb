@@ -1,17 +1,30 @@
 #mixin for all guardian methods dealing with category permisions
 module CategoryGuardian
+
   # Creating Method
-  def can_create_category?(parent)
-    is_staff?
+  def can_create_category?(parent=nil)
+    is_admin? ||
+    (
+      SiteSetting.allow_moderators_to_create_categories &&
+      is_moderator?
+    )
   end
 
   # Editing Method
   def can_edit_category?(category)
-    is_staff?
+    is_admin? ||
+    (
+      SiteSetting.allow_moderators_to_create_categories &&
+      is_moderator? &&
+      can_see_category?(category)
+    )
   end
 
   def can_delete_category?(category)
-    is_staff? && category.topic_count == 0 && !category.uncategorized?
+    can_edit_category?(category) &&
+    category.topic_count == 0 &&
+    !category.uncategorized? &&
+    !category.has_children?
   end
 
   def can_see_category?(category)

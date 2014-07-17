@@ -5,9 +5,9 @@ require_dependency 'avatar_upload_service'
 class UsersController < ApplicationController
 
   skip_before_filter :authorize_mini_profiler, only: [:avatar]
-  skip_before_filter :check_xhr, only: [:show, :password_reset, :update, :activate_account, :authorize_email, :user_preferences_redirect, :avatar]
+  skip_before_filter :check_xhr, only: [:show, :password_reset, :update, :activate_account, :authorize_email, :user_preferences_redirect, :avatar, :my_redirect]
 
-  before_filter :ensure_logged_in, only: [:username, :update, :change_email, :user_preferences_redirect, :upload_avatar, :toggle_avatar]
+  before_filter :ensure_logged_in, only: [:username, :update, :change_email, :user_preferences_redirect, :upload_user_image, :pick_avatar, :destroy_user_image, :destroy]
   before_filter :respond_to_suspicious_request, only: [:create]
 
   # we need to allow account creation with bad CSRF tokens, if people are caching, the CSRF token on the
@@ -61,22 +61,45 @@ class UsersController < ApplicationController
     render nothing: true
   end
 
+  def badge_title
+    params.require(:user_badge_id)
+
+    user = fetch_user_from_params
+    guardian.ensure_can_edit!(user)
+
+    user_badge = UserBadge.find(params[:user_badge_id])
+    if user_badge.user == user && user_badge.badge.allow_title?
+      user.title = user_badge.badge.name
+      user.save!
+    end
+
+    render nothing: true
+  end
+
   def preferences
     render nothing: true
+  end
+
+  def my_redirect
+    if current_user.present? && params[:path] =~ /^[a-z\-\/]+$/
+      redirect_to "/users/#{current_user.username}/#{params[:path]}"
+      return
+    end
+    raise Discourse::NotFound.new
   end
 
   def invited
     inviter = fetch_user_from_params
 
-    invites = if guardian.can_see_pending_invites_from?(inviter)
+    invites = if guardian.can_see_invite_details?(inviter)
       Invite.find_all_invites_from(inviter)
     else
       Invite.find_redeemed_invites_from(inviter)
     end
 
     invites = invites.filter_by(params[:filter])
-
-    render_serialized(invites.to_a, InviteSerializer)
+    render_json_dump invites: serialize_data(invites.to_a, InviteSerializer),
+                     can_see_invite_details: guardian.can_see_invite_details?(inviter)
   end
 
   def is_local_username
@@ -123,10 +146,20 @@ class UsersController < ApplicationController
     user = User.new(user_params)
 
     authentication = UserAuthenticator.new(user, session)
+
+    if !authentication.has_authenticator? && !SiteSetting.enable_local_logins
+      render nothing: true, status: 500
+      return
+    end
+
     authentication.start
 
     activation = UserActivator.new(user, request, session, cookies)
     activation.start
+
+    # just assign a password if we have an authenticator and no password
+    # this is the case for Twitter
+    user.password = SecureRandom.hex if user.password.blank? && authentication.has_authenticator?
 
     if user.save
       authentication.finish
@@ -153,7 +186,7 @@ class UsersController < ApplicationController
       success: false,
       message: I18n.t("login.something_already_taken")
     }
-  rescue DiscourseHub::NicknameUnavailable => e
+  rescue DiscourseHub::UsernameUnavailable => e
     render json: e.response_message
   rescue RestClient::Forbidden
     render json: { errors: [I18n.t("discourse_hub.access_token_problem")] }
@@ -167,7 +200,15 @@ class UsersController < ApplicationController
     expires_now()
 
     @user = EmailToken.confirm(params[:token])
-    if @user.blank?
+
+    if @user
+      session[params[:token]] = @user.id
+    else
+      user_id = session[params[:token]]
+      @user = User.find(user_id) if user_id
+    end
+
+    if !@user
       flash[:error] = I18n.t('password_reset.no_token')
     elsif request.put?
       raise Discourse::InvalidParameters.new(:password) unless params[:password].present?
@@ -192,7 +233,7 @@ class UsersController < ApplicationController
               end
 
     flash[:success] = I18n.t(message)
-   end
+  end
 
   def change_email
     params.require(:email)
@@ -262,9 +303,9 @@ class UsersController < ApplicationController
     topic_id = params[:topic_id]
     topic_id = topic_id.to_i if topic_id
 
-    results = UserSearch.new(term, topic_id).search
+    results = UserSearch.new(term, topic_id: topic_id, searching_user: current_user).search
 
-    user_fields = [:username, :use_uploaded_avatar, :upload_avatar_template, :uploaded_avatar_id]
+    user_fields = [:username, :upload_avatar_template, :uploaded_avatar_id]
     user_fields << :name if SiteSetting.enable_names?
 
     to_render = { users: results.as_json(only: user_fields, methods: :avatar_template) }
@@ -279,7 +320,7 @@ class UsersController < ApplicationController
   # [LEGACY] avatars in quotes/oneboxes might still be pointing to this route
   # fixing it requires a rebake of all the posts
   def avatar
-    user = User.where(username_lower: params[:username].downcase).first
+    user = User.find_by(username_lower: params[:username].downcase)
     if user.present?
       size = determine_avatar_size(params[:size])
       url = user.avatar_template.gsub("{size}", size.to_s)
@@ -298,47 +339,76 @@ class UsersController < ApplicationController
     size
   end
 
+  # LEGACY: used by the API
   def upload_avatar
+    params[:image_type] = "avatar"
+    upload_user_image
+  end
+
+  def upload_user_image
+    params.require(:image_type)
     user = fetch_user_from_params
     guardian.ensure_can_edit!(user)
 
     file = params[:file] || params[:files].first
 
-    # Only allow url uploading for API users
-    # TODO: Does not protect from huge uploads
-    # https://github.com/discourse/discourse/pull/1512
-    # check the file size (note: this might also be done in the web server)
-    avatar        = build_avatar_from(file)
-    avatar_policy = AvatarUploadPolicy.new(avatar)
-
-    if avatar_policy.too_big?
-      return render status: 413, text: I18n.t("upload.images.too_large",
-                                              max_size_kb: avatar_policy.max_size_kb)
+    begin
+      image = build_user_image_from(file)
+    rescue Discourse::InvalidParameters
+      return render status: 422, text: I18n.t("upload.images.unknown_image_type")
     end
 
-    raise FastImage::UnknownImageType unless SiteSetting.authorized_image?(avatar.file)
+    upload = Upload.create_for(user.id, image.file, image.filename, image.filesize)
 
-    upload_avatar_for(user, avatar)
-
-  rescue Discourse::InvalidParameters
-    render status: 422, text: I18n.t("upload.images.unknown_image_type")
-  rescue FastImage::ImageFetchFailure
-    render status: 422, text: I18n.t("upload.images.fetch_failure")
-  rescue FastImage::UnknownImageType
-    render status: 422, text: I18n.t("upload.images.unknown_image_type")
-  rescue FastImage::SizeNotFound
-    render status: 422, text: I18n.t("upload.images.size_not_found")
+    if upload.errors.empty?
+      case params[:image_type]
+      when "avatar"
+        upload_avatar_for(user, upload)
+      when "profile_background"
+        upload_profile_background_for(user.user_profile, upload)
+      end
+    else
+      render status: 422, text: upload.errors.full_messages
+    end
   end
 
-  def toggle_avatar
-    params.require(:use_uploaded_avatar)
+  def pick_avatar
     user = fetch_user_from_params
     guardian.ensure_can_edit!(user)
+    upload_id = params[:upload_id]
 
-    user.use_uploaded_avatar = params[:use_uploaded_avatar]
+    user.uploaded_avatar_id = upload_id
+
+    # ensure we associate the custom avatar properly
+    if upload_id && !user.user_avatar.contains_upload?(upload_id)
+      user.user_avatar.custom_upload_id = upload_id
+    end
     user.save!
 
     render nothing: true
+  end
+
+  def destroy_user_image
+    user = fetch_user_from_params
+    guardian.ensure_can_edit!(user)
+
+    image_type = params.require(:image_type)
+    if image_type == 'profile_background'
+      user.user_profile.clear_profile_background
+    else
+      raise Discourse::InvalidParameters.new(:image_type)
+    end
+
+    render nothing: true
+  end
+
+  def destroy
+    @user = fetch_user_from_params
+    guardian.ensure_can_delete_user!(@user)
+
+    UserDestroyer.new(current_user).destroy(@user, {delete_posts: true, context: params[:context]})
+
+    render json: success_json
   end
 
   private
@@ -357,20 +427,24 @@ class UsersController < ApplicationController
       challenge
     end
 
-    def build_avatar_from(file)
+    def build_user_image_from(file)
       source = if file.is_a?(String)
-                 is_api? ? :url : (raise FastImage::UnknownImageType)
+                 is_api? ? :url : (raise Discourse::InvalidParameters)
                else
                  :image
                end
+
       AvatarUploadService.new(file, source)
     end
 
-    def upload_avatar_for(user, avatar)
-      upload = Upload.create_for(user.id, avatar.file, avatar.filesize)
-      user.upload_avatar(upload)
+    def upload_avatar_for(user, upload)
+      render json: { upload_id: upload.id, url: upload.url, width: upload.width, height: upload.height }
+    end
 
-      Jobs.enqueue(:generate_avatars, user_id: user.id, upload_id: upload.id)
+    def upload_profile_background_for(user_profile, upload)
+      user_profile.upload_profile_background(upload)
+      # TODO: add a resize job here
+
       render json: { url: upload.url, width: upload.width, height: upload.height }
     end
 
@@ -400,7 +474,8 @@ class UsersController < ApplicationController
         :name,
         :email,
         :password,
-        :username
-      ).merge(ip_address: request.ip)
+        :username,
+        :active
+      ).merge(ip_address: request.ip, registration_ip_address: request.ip)
     end
 end

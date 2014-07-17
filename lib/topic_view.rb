@@ -7,7 +7,7 @@ require_dependency 'gaps'
 class TopicView
 
   attr_reader :topic, :posts, :guardian, :filtered_posts
-  attr_accessor :draft, :draft_key, :draft_sequence
+  attr_accessor :draft, :draft_key, :draft_sequence, :user_custom_fields
 
   def initialize(topic_id, user=nil, options={})
     @user = user
@@ -29,6 +29,10 @@ class TopicView
     @index_reverse = false
 
     filter_posts(options)
+
+    if SiteSetting.public_user_custom_fields.present? && @posts
+      @user_custom_fields = User.custom_fields_for_ids(@posts.map(&:user_id), SiteSetting.public_user_custom_fields.split('|'))
+    end
 
     @draft_key = @topic.draft_key
     @draft_sequence = DraftSequence.current(@user, @draft_key)
@@ -59,11 +63,27 @@ class TopicView
     @last_post ||= @posts.last
   end
 
+  def prev_page
+    if @page && @page > 1 && posts.length > 0
+      @page - 1
+    else
+      nil
+    end
+  end
+
   def next_page
     @next_page ||= begin
       if last_post && (@topic.highest_post_number > last_post.post_number)
         @page + 1
       end
+    end
+  end
+
+  def prev_page_path
+    if prev_page > 1
+      "#{@topic.relative_url}?page=#{prev_page}"
+    else
+      @topic.relative_url
     end
   end
 
@@ -111,6 +131,22 @@ class TopicView
     filter_posts_paged(opts[:page].to_i)
   end
 
+  def primary_group_names
+    return @group_names if @group_names
+
+    primary_group_ids = Set.new
+    @posts.each do |p|
+      primary_group_ids << p.user.primary_group_id if p.user.try(:primary_group_id)
+    end
+
+    result = {}
+    unless primary_group_ids.empty?
+      Group.where(id: primary_group_ids.to_a).pluck(:id, :name).each do |g|
+        result[g[0]] = g[1]
+      end
+    end
+    result
+  end
 
   # Find the sort order for a post in the topic
   def sort_order_for_post_number(post_number)
@@ -147,13 +183,14 @@ class TopicView
   end
 
   def read?(post_number)
+    return true unless @user
     read_posts_set.include?(post_number)
   end
 
   def topic_user
     @topic_user ||= begin
       return nil if @user.blank?
-      @topic.topic_users.where(user_id: @user.id).first
+      @topic.topic_users.find_by(user_id: @user.id)
     end
   end
 
@@ -170,7 +207,7 @@ class TopicView
   end
 
   def all_post_actions
-    @all_post_actions ||= PostAction.counts_for(posts, @user)
+    @all_post_actions ||= PostAction.counts_for(@posts, @user)
   end
 
   def links
@@ -240,7 +277,7 @@ class TopicView
 
   def filter_posts_by_ids(post_ids)
     # TODO: Sort might be off
-    @posts = Post.where(id: post_ids)
+    @posts = Post.where(id: post_ids, topic_id: @topic.id)
                  .includes(:user)
                  .includes(:reply_to_user)
                  .order('sort_order')
@@ -270,6 +307,7 @@ class TopicView
   def unfiltered_posts
     result = @topic.posts
     result = result.with_deleted if @user.try(:staff?)
+    result = @topic.posts.where("user_id IS NOT NULL") if @exclude_deleted_users
     result
   end
 

@@ -27,7 +27,8 @@ class TopicUser < ActiveRecord::Base
         :created_post,
         :auto_watch,
         :auto_watch_category,
-        :auto_mute_category
+        :auto_mute_category,
+        :auto_track_category
       )
     end
 
@@ -66,28 +67,10 @@ class TopicUser < ActiveRecord::Base
       result
     end
 
-    def get(topic,user)
-      topic = topic.id if Topic === topic
-      user = user.id if User === user
-      TopicUser.where('topic_id = ? and user_id = ?', topic, user).first
-    end
-
-    def auto_watch_new_topic(topic_id)
-      # Can not afford to slow down creation of topics when a pile of users are watching new topics, reverting to SQL for max perf here
-      sql = <<SQL
-      INSERT INTO topic_users(user_id, topic_id, notification_level, notifications_reason_id)
-      SELECT id, :topic_id, :level, :reason
-      FROM users
-      WHERE watch_new_topics AND
-            NOT EXISTS(SELECT 1 FROM topic_users WHERE topic_id = :topic_id AND user_id = users.id)
-SQL
-
-      exec_sql(
-          sql,
-                    topic_id: topic_id,
-                    level: notification_levels[:watching],
-                    reason: notification_reasons[:auto_watch]
-              )
+    def get(topic, user)
+      topic = topic.id if topic.is_a?(Topic)
+      user = user.id if user.is_a?(User)
+      TopicUser.find_by(topic_id: topic, user_id: user)
     end
 
     # Change attributes for a user (creates a record when none is present). First it tries an update
@@ -117,7 +100,7 @@ SQL
 
         if rows == 0
           now = DateTime.now
-          auto_track_after = User.select(:auto_track_topics_after_msecs).where(id: user_id).first.auto_track_topics_after_msecs
+          auto_track_after = User.select(:auto_track_topics_after_msecs).find_by(id: user_id).auto_track_topics_after_msecs
           auto_track_after ||= SiteSetting.auto_track_topics_after
 
           if auto_track_after >= 0 && auto_track_after <= (attrs[:total_msecs_viewed] || 0)
@@ -129,13 +112,20 @@ SQL
           observe_after_save_callbacks_for topic_id, user_id
         end
       end
+
+      if attrs[:notification_level]
+        MessageBus.publish("/topic/#{topic_id}",
+                         {notification_level_change: attrs[:notification_level]}, user_ids: [user_id])
+      end
+
+
     rescue ActiveRecord::RecordNotUnique
       # In case of a race condition to insert, do nothing
     end
 
     def track_visit!(topic,user)
-      topic_id = Topic === topic ? topic.id : topic
-      user_id = User === user ? user.id : topic
+      topic_id = topic.is_a?(Topic) ? topic.id : topic
+      user_id = user.is_a?(User) ? user.id : topic
 
       now = DateTime.now
       rows = TopicUser.where({topic_id: topic_id, user_id: user_id}).update_all({last_visited_at: now})
@@ -199,7 +189,9 @@ SQL
         before_last_read = rows[0][2].to_i
 
         if before_last_read < post_number
-          TopicTrackingState.publish_read(topic_id, post_number, user.id)
+          # The user read at least one new post
+          TopicTrackingState.publish_read(topic_id, post_number, user.id, after)
+          user.update_posts_read!(post_number - before_last_read)
         end
 
         if before != after
@@ -208,14 +200,16 @@ SQL
       end
 
       if rows.length == 0
-        TopicTrackingState.publish_read(topic_id, post_number, user.id)
+        # The user read at least one post in a topic that they haven't viewed before.
+        args[:new_status] = notification_levels[:regular]
+        if (user.auto_track_topics_after_msecs || SiteSetting.auto_track_topics_after) == 0
+          args[:new_status] = notification_levels[:tracking]
+        end
+        TopicTrackingState.publish_read(topic_id, post_number, user.id, args[:new_status])
+        user.update_posts_read!(post_number)
 
-        args[:tracking] = notification_levels[:tracking]
-        args[:regular] = notification_levels[:regular]
-        args[:site_setting] = SiteSetting.auto_track_topics_after
         exec_sql("INSERT INTO topic_users (user_id, topic_id, last_read_post_number, seen_post_count, last_visited_at, first_visited_at, notification_level)
-                  SELECT :user_id, :topic_id, :post_number, ft.highest_post_number, :now, :now,
-                    case when coalesce(u.auto_track_topics_after_msecs, :site_setting) = 0 then :tracking else :regular end
+                  SELECT :user_id, :topic_id, :post_number, ft.highest_post_number, :now, :now, :new_status
                   FROM topics AS ft
                   JOIN users u on u.id = :user_id
                   WHERE ft.id = :topic_id
@@ -223,6 +217,8 @@ SQL
                                    FROM topic_users AS ftu
                                    WHERE ftu.user_id = :user_id and ftu.topic_id = :topic_id)",
                   args)
+
+        MessageBus.publish("/topic/#{topic_id}", {notification_level_change: args[:new_status]}, user_ids: [user.id])
       end
     end
 
@@ -289,9 +285,9 @@ end
 #  cleared_pinned_at        :datetime
 #  unstarred_at             :datetime
 #  id                       :integer          not null, primary key
+#  last_emailed_post_number :integer
 #
 # Indexes
 #
-#  index_forum_thread_users_on_forum_thread_id_and_user_id  (topic_id,user_id) UNIQUE
+#  index_topic_users_on_topic_id_and_user_id  (topic_id,user_id) UNIQUE
 #
-

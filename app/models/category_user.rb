@@ -6,9 +6,21 @@ class CategoryUser < ActiveRecord::Base
     self.where(user: user, notification_level: notification_levels[level])
   end
 
+  def self.lookup_by_category(user, category)
+    self.where(user: user, category: category)
+  end
+
   # same for now
   def self.notification_levels
     TopicUser.notification_levels
+  end
+
+  def self.auto_track_new_topic(topic)
+    apply_default_to_topic(
+                           topic,
+                           TopicUser.notification_levels[:tracking],
+                           TopicUser.notification_reasons[:auto_track_category]
+                          )
   end
 
   def self.auto_watch_new_topic(topic)
@@ -35,21 +47,17 @@ class CategoryUser < ActiveRecord::Base
     end
   end
 
-  def self.auto_mute_new_topic(topic)
-    apply_default_to_topic(
-                           topic,
-                           TopicUser.notification_levels[:muted],
-                           TopicUser.notification_reasons[:auto_mute_category]
-                          )
-  end
+  def self.set_notification_level_for_category(user, level, category_id)
+    record = CategoryUser.where(user: user, category_id: category_id).first
+    # oder CategoryUser.where(user: user, category_id: category_id).destroy_all
+    # und danach mir create anlegen.
 
-  def notification_level1=(val)
-    val = Symbol === val ? CategoryUser.notification_levels[val] : val
-    attributes[:notification_level] = val
-  end
-
-  def notification_level1
-    attributes[:notification_level]
+    if record.present?
+      record.notification_level = level
+      record.save!
+    else
+      CategoryUser.create!(user: user, category_id: category_id, notification_level: level)
+    end
   end
 
   private
@@ -76,3 +84,13 @@ SQL
   end
 
 end
+
+# == Schema Information
+#
+# Table name: category_users
+#
+#  id                 :integer          not null, primary key
+#  category_id        :integer          not null
+#  user_id            :integer          not null
+#  notification_level :integer          not null
+#

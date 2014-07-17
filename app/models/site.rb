@@ -17,6 +17,10 @@ class Site
     PostActionType.ordered
   end
 
+  def topic_flag_types
+    post_action_types.where(name_key: ['inappropriate', 'spam', 'notify_moderators'])
+  end
+
   def notification_types
     Notification.types
   end
@@ -26,7 +30,7 @@ class Site
   end
 
   def group_names
-    @group_name ||= Group.pluck(:name)
+    @group_name ||= Group.order(:name).pluck(:name)
   end
 
   def categories
@@ -39,9 +43,20 @@ class Site
 
       allowed_topic_create = Set.new(Category.topic_create_allowed(@guardian).pluck(:id))
 
-      categories.each do |category|
-        category.permission = CategoryGroup.permission_types[:full] if allowed_topic_create.include?(category.id)
+      by_id = {}
+
+      category_user = {}
+      unless @guardian.anonymous?
+        category_user = Hash[*CategoryUser.where(user: @guardian.user).pluck(:category_id, :notification_level).flatten]
       end
+
+      categories.each do |category|
+        category.notification_level = category_user[category.id]
+        category.permission = CategoryGroup.permission_types[:full] if allowed_topic_create.include?(category.id)
+        by_id[category.id] = category
+      end
+
+      categories.reject! {|c| c.parent_category_id && !by_id[c.parent_category_id]}
       categories
     end
   end
@@ -50,12 +65,7 @@ class Site
     Archetype.list.reject { |t| t.id == Archetype.private_message }
   end
 
-  def cache_key
-    k = "site_json_cats_"
-    k << @guardian.secure_category_ids.join("_") if @guardian
-  end
-
-  def self.cached_json(guardian)
+  def self.json_for(guardian)
 
     if guardian.anonymous? && SiteSetting.login_required
       return {
@@ -68,7 +78,4 @@ class Site
     MultiJson.dump(SiteSerializer.new(site, root: false))
   end
 
-  def self.invalidate_cache
-    Discourse.cache.delete_by_family("site")
-  end
 end

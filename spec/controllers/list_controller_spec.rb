@@ -56,9 +56,18 @@ describe ListController do
     context 'in a category' do
       let(:category) { Fabricate(:category) }
 
+      context 'without access to see the category' do
+        before do
+          Guardian.any_instance.expects(:can_see?).with(category).returns(false)
+          xhr :get, :category_latest, category: category.slug
+        end
+
+        it { should_not respond_with(:success) }
+      end
+
       context 'with access to see the category' do
         before do
-          xhr :get, :latest_category, category: category.slug
+          xhr :get, :category_latest, category: category.slug
         end
 
         it { should respond_with(:success) }
@@ -66,7 +75,7 @@ describe ListController do
 
       context 'with a link that includes an id' do
         before do
-          xhr :get, :latest_category, category: "#{category.id}-#{category.slug}"
+          xhr :get, :category_latest, category: "#{category.id}-#{category.slug}"
         end
 
         it { should respond_with(:success) }
@@ -77,7 +86,7 @@ describe ListController do
         let!(:other_category) { Fabricate(:category, name: "#{category.id} name") }
 
         before do
-          xhr :get, :latest_category, category: other_category.slug
+          xhr :get, :category_latest, category: other_category.slug
         end
 
         it { should respond_with(:success) }
@@ -92,7 +101,7 @@ describe ListController do
 
         context 'when parent and child are requested' do
           before do
-            xhr :get, :latest_category, parent_category: category.slug, category: sub_category.slug
+            xhr :get, :category_latest, parent_category: category.slug, category: sub_category.slug
           end
 
           it { should respond_with(:success) }
@@ -100,7 +109,7 @@ describe ListController do
 
         context 'when child is requested with the wrong parent' do
           before do
-            xhr :get, :latest_category, parent_category: 'not_the_right_slug', category: sub_category.slug
+            xhr :get, :category_latest, parent_category: 'not_the_right_slug', category: sub_category.slug
           end
 
           it { should_not respond_with(:success) }
@@ -204,6 +213,33 @@ describe ListController do
 
       it { should respond_with(:success) }
     end
+  end
+
+  describe "best_periods_for" do
+
+    it "returns yearly for more than 180 days" do
+      ListController.best_periods_for(nil).should == [:yearly]
+      ListController.best_periods_for(180.days.ago).should == [:yearly]
+    end
+
+    it "includes monthly when less than 180 days and more than 35 days" do
+      (35...180).each do |date|
+        ListController.best_periods_for(date.days.ago).should == [:monthly, :yearly]
+      end
+    end
+
+    it "includes weekly when less than 35 days and more than 8 days" do
+      (8...35).each do |date|
+        ListController.best_periods_for(date.days.ago).should == [:weekly, :monthly, :yearly]
+      end
+    end
+
+    it "includes daily when less than 8 days" do
+      (0...8).each do |date|
+        ListController.best_periods_for(date.days.ago).should == [:daily, :weekly, :monthly, :yearly]
+      end
+    end
+
   end
 
 end

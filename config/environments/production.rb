@@ -10,23 +10,16 @@ Discourse::Application.configure do
   config.action_controller.perform_caching = true
 
   # Disable Rails's static asset server (Apache or nginx will already do this)
-  config.serve_static_assets = false
+  config.serve_static_assets = GlobalSetting.serve_static_assets
 
-  if rails4?
-    config.assets.js_compressor  = :uglifier
-    config.assets.css_compressor = :sass
-  else
-    config.assets.compress = true
-  end
+  config.assets.js_compressor  = :uglifier
+  config.assets.css_compressor = :sass
 
   # stuff should be pre-compiled
   config.assets.compile = false
 
   # Generate digests for assets URLs
   config.assets.digest = true
-
-  # Specifies the header that your server uses for sending files
-  config.action_dispatch.x_sendfile_header = 'X-Accel-Redirect' # for nginx
 
   # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
   # the I18n.default_locale when a translation can not be found)
@@ -42,6 +35,8 @@ Discourse::Application.configure do
       authentication:       GlobalSetting.smtp_authentication,
       enable_starttls_auto: GlobalSetting.smtp_enable_start_tls
     }
+
+    settings[:openssl_verify_mode] = GlobalSetting.smtp_openssl_verify_mode if GlobalSetting.smtp_openssl_verify_mode
 
     config.action_mailer.smtp_settings = settings.reject{|x,y| y.nil?}
   else

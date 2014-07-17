@@ -10,8 +10,8 @@ module PrettyText
     def t(key, opts)
       str = I18n.t("js." + key)
       if opts
-        # TODO: server localisation has no parity with client
-        # should be fixed
+        # TODO: server localisation has no parity with client should be fixed
+        str = str.dup
         opts.each do |k,v|
           str.gsub!("{{#{k}}}", v)
         end
@@ -23,14 +23,14 @@ module PrettyText
     def avatar_template(username)
       return "" unless username
 
-      user = User.where(username_lower: username.downcase).first
+      user = User.find_by(username_lower: username.downcase)
       user.avatar_template if user.present?
     end
 
     def is_username_valid(username)
       return false unless username
       username = username.downcase
-      return User.exec_sql('select 1 from users where username_lower = ?', username).values.length == 1
+      return User.exec_sql('SELECT 1 FROM users WHERE username_lower = ?', username).values.length == 1
     end
   end
 
@@ -52,12 +52,13 @@ module PrettyText
     ctx["helpers"] = Helpers.new
 
     ctx_load(ctx,
-             "vendor/assets/javascripts/md5.js",
-              "vendor/assets/javascripts/lodash.js",
-              "vendor/assets/javascripts/Markdown.Converter.js",
-              "lib/headless-ember.js",
-              "vendor/assets/javascripts/rsvp.js",
-              Rails.configuration.ember.handlebars_location)
+      "vendor/assets/javascripts/md5.js",
+      "vendor/assets/javascripts/lodash.js",
+      "vendor/assets/javascripts/Markdown.Converter.js",
+      "lib/headless-ember.js",
+      "vendor/assets/javascripts/rsvp.js",
+      Rails.configuration.ember.handlebars_location
+    )
 
     ctx.eval("var Discourse = {}; Discourse.SiteSettings = {};")
     ctx.eval("var window = {}; window.devicePixelRatio = 2;") # hack to make code think stuff is retina
@@ -66,11 +67,14 @@ module PrettyText
     decorate_context(ctx)
 
     ctx_load(ctx,
-              "vendor/assets/javascripts/better_markdown.js",
-              "app/assets/javascripts/defer/html-sanitizer-bundle.js",
-              "app/assets/javascripts/discourse/dialects/dialect.js",
-              "app/assets/javascripts/discourse/lib/utilities.js",
-              "app/assets/javascripts/discourse/lib/markdown.js")
+      "public/javascripts/highlight.pack.js",
+      "vendor/assets/javascripts/better_markdown.js",
+      "app/assets/javascripts/defer/html-sanitizer-bundle.js",
+      "app/assets/javascripts/discourse/dialects/dialect.js",
+      "app/assets/javascripts/discourse/lib/utilities.js",
+      "app/assets/javascripts/discourse/lib/html.js",
+      "app/assets/javascripts/discourse/lib/markdown.js"
+    )
 
     Dir["#{Rails.root}/app/assets/javascripts/discourse/dialects/**.js"].each do |dialect|
       unless dialect =~ /\/dialect\.js$/
@@ -109,6 +113,7 @@ module PrettyText
       return @ctx if @ctx
       @ctx = create_new_context
     end
+
     @ctx
   end
 
@@ -125,7 +130,7 @@ module PrettyText
 
     baked = nil
 
-    @mutex.synchronize do
+    protect do
       context = v8
       # we need to do this to work in a multi site environment, many sites, many settings
       decorate_context(context)
@@ -152,14 +157,12 @@ module PrettyText
 
   # leaving this here, cause it invokes v8, don't want to implement twice
   def self.avatar_img(avatar_template, size)
-    r = nil
-    @mutex.synchronize do
+    protect do
       v8['avatarTemplate'] = avatar_template
       v8['size'] = size
       decorate_context(v8)
-      r = v8.eval("Discourse.Utilities.avatarImg({ avatarTemplate: avatarTemplate, size: size });")
+      v8.eval("Discourse.Utilities.avatarImg({ avatarTemplate: avatarTemplate, size: size });")
     end
-    r
   end
 
   def self.cook(text, opts={})
@@ -175,7 +178,7 @@ module PrettyText
     whitelist = []
 
     domains = SiteSetting.exclude_rel_nofollow_domains
-    whitelist = domains.split(",") if domains.present?
+    whitelist = domains.split('|') if domains.present?
 
     site_uri = nil
     doc = Nokogiri::HTML.fragment(html)
@@ -192,7 +195,7 @@ module PrettyText
         else
           l["rel"] = "nofollow"
         end
-      rescue URI::InvalidURIError
+      rescue URI::InvalidURIError, URI::InvalidComponentError
         # add a nofollow anyway
         l["rel"] = "nofollow"
       end
@@ -208,7 +211,7 @@ module PrettyText
     # extract all links from the post
     doc.css("a").each { |l| links << l["href"] unless l["href"].blank? }
     # extract links to quotes
-    doc.css("aside.quote").each do |a|
+    doc.css("aside.quote[data-topic]").each do |a|
       topic_id = a['data-topic']
 
       url = "/t/topic/#{topic_id}"
@@ -235,23 +238,59 @@ module PrettyText
     fragment.to_html
   end
 
-  def self.make_all_links_absolute(html)
+  # Given a Nokogiri doc, convert all links to absolute
+  def self.make_all_links_absolute(doc)
     site_uri = nil
-    doc = Nokogiri::HTML.fragment(html)
-    doc.css("a").each do |l|
-      href = l["href"].to_s
+    doc.css("a").each do |link|
+      href = link["href"].to_s
       begin
         uri = URI(href)
         site_uri ||= URI(Discourse.base_url)
-        l["href"] = "#{site_uri}#{l['href']}" unless uri.host.present?
+        link["href"] = "#{site_uri}#{link['href']}" unless uri.host.present?
       rescue URI::InvalidURIError
         # leave it
       end
     end
+  end
+
+  def self.strip_image_wrapping(doc)
+    doc.css(".lightbox-wrapper .meta").remove
+  end
+
+  def self.format_for_email(html)
+    doc = Nokogiri::HTML.fragment(html)
+    make_all_links_absolute(doc)
+    strip_image_wrapping(doc)
     doc.to_html
   end
 
   protected
+
+  class JavaScriptError < StandardError
+    attr_accessor :message, :backtrace
+
+    def initialize(message, backtrace)
+      @message = message
+      @backtrace = backtrace
+    end
+
+  end
+
+  def self.protect
+    rval = nil
+    @mutex.synchronize do
+      begin
+        rval = yield
+        # This may seem a bit odd, but we don't want to leak out
+        # objects that require locks on the v8 vm, to get a backtrace
+        # you need a lock, if this happens in the wrong spot you can
+        # deadlock a process
+      rescue V8::Error => e
+        raise JavaScriptError.new(e.message, e.backtrace)
+      end
+    end
+    rval
+  end
 
   def self.ctx_load(ctx, *files)
     files.each do |file|

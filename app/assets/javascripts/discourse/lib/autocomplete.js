@@ -31,19 +31,16 @@ shiftMap[32] = " ";
 function mapKeyPressToActualCharacter(isShiftKey, characterCode) {
   if ( characterCode === 27 || characterCode === 8 || characterCode === 9 || characterCode === 20 || characterCode === 16 || characterCode === 17 || characterCode === 91 || characterCode === 13 || characterCode === 92 || characterCode === 18 ) { return false; }
 
-  if (isShiftKey) {
-    if ( characterCode >= 65 && characterCode <= 90 ) {
-      return String.fromCharCode(characterCode);
-    } else {
-      return shiftMap[characterCode];
-    }
-  } else {
-    if ( characterCode >= 65 && characterCode <= 90 ) {
-      return String.fromCharCode(characterCode).toLowerCase();
-    } else {
-      return String.fromCharCode(characterCode);
-    }
+  // Lookup non-letter keypress while holding shift
+  if (isShiftKey && ( characterCode < 65 || characterCode > 90 )) {
+    return shiftMap[characterCode];
   }
+
+  var stringValue = String.fromCharCode(characterCode);
+  if ( !isShiftKey ) {
+    stringValue = stringValue.toLowerCase();
+  }
+  return stringValue;
 }
 
 $.fn.autocomplete = function(options) {
@@ -83,12 +80,13 @@ $.fn.autocomplete = function(options) {
   };
 
   var addInputSelectedItem = function(item) {
-    var transformed;
+    var transformed,
+        transformedItem = item;
 
-    if (options.transformComplete) { transformed = options.transformComplete(item); }
+    if (options.transformComplete) { transformedItem = options.transformComplete(transformedItem); }
     // dump what we have in single mode, just in case
     if (options.single) { inputSelectedItems = []; }
-    if (!_.isArray(transformed)) { transformed = [transformed || item]; }
+    transformed = _.isArray(transformedItem) ? transformedItem : [transformedItem || item];
 
     var divs = transformed.map(function(itm) {
       var d = $("<div class='item'><span>" + itm + "<a class='remove' href='#'><i class='fa fa-times'></i></a></span></div>");
@@ -106,7 +104,7 @@ $.fn.autocomplete = function(options) {
 
     $(divs).find('a').click(function() {
       closeAutocomplete();
-      inputSelectedItems.splice($.inArray(item, inputSelectedItems), 1);
+      inputSelectedItems.splice($.inArray(transformedItem, inputSelectedItems), 1);
       $(this).parent().parent().remove();
       if (options.single) {
         me.show();
@@ -234,6 +232,9 @@ $.fn.autocomplete = function(options) {
     if (completeStart === null) return;
 
     if (r && r.then && typeof(r.then) === "function") {
+      if (div) {
+        div.hide().remove();
+      }
       r.then(updateAutoComplete);
       return;
     }
@@ -245,7 +246,6 @@ $.fn.autocomplete = function(options) {
       renderAutocomplete();
     }
   };
-
 
   // chain to allow multiples
   var oldClose = me.data("closeAutocomplete");
@@ -267,14 +267,13 @@ $.fn.autocomplete = function(options) {
       var prevChar = me.val().charAt(caretPosition - 1);
       if (!prevChar || /\s/.test(prevChar)) {
         completeStart = completeEnd = caretPosition;
-        var term = "";
-        updateAutoComplete(options.dataSource(term));
+        updateAutoComplete(options.dataSource(""));
       }
     }
   });
 
-  return $(this).keydown(function(e) {
-    var c, caretPosition, i, initial, next, nextIsGood, prev, prevIsGood, stopFound, term, total, userToComplete;
+  $(this).keydown(function(e) {
+    var c, caretPosition, i, initial, next, prev, prevIsGood, stopFound, term, total, userToComplete;
 
     if(options.allowAny){
       // saves us wiring up a change event as well, keypress is while its pressed
@@ -301,7 +300,6 @@ $.fn.autocomplete = function(options) {
     if ((completeStart === null) && e.which === 8 && options.key) {
       c = Discourse.Utilities.caretPosition(me[0]);
       next = me[0].value[c];
-      nextIsGood = next === void 0 || /\s/.test(next);
       c -= 1;
       initial = c;
       prevIsGood = true;
@@ -400,10 +398,8 @@ $.fn.autocomplete = function(options) {
             term += (e.shiftKey) ? "|" : "]";
           } else if (e.which === 222) {
             term += (e.shiftKey) ? "\"" : "'";
-          } else {
-            if (e.which !== 8) {
-              term += ",";
-            }
+          } else if (e.which !== 8) {
+            term += ",";
           }
 
           updateAutoComplete(options.dataSource(term));
@@ -411,4 +407,6 @@ $.fn.autocomplete = function(options) {
       }
     }
   });
+
+  return this;
 };

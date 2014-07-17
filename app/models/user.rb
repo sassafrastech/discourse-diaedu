@@ -6,13 +6,15 @@ require_dependency 'summarize'
 require_dependency 'discourse'
 require_dependency 'post_destroyer'
 require_dependency 'user_name_suggester'
-require_dependency 'roleable'
 require_dependency 'pretty_text'
 require_dependency 'url_helper'
+require_dependency 'letter_avatar'
+require_dependency 'promotion'
 
 class User < ActiveRecord::Base
   include Roleable
   include UrlHelper
+  include HasCustomFields
 
   has_many :posts
   has_many :notifications, dependent: :destroy
@@ -21,6 +23,8 @@ class User < ActiveRecord::Base
   has_many :user_open_ids, dependent: :destroy
   has_many :user_actions, dependent: :destroy
   has_many :post_actions, dependent: :destroy
+  has_many :user_badges, dependent: :destroy
+  has_many :badges, through: :user_badges
   has_many :email_logs, dependent: :destroy
   has_many :post_timings
   has_many :topic_allowed_users, dependent: :destroy
@@ -32,13 +36,16 @@ class User < ActiveRecord::Base
   has_many :topic_links, dependent: :destroy
   has_many :uploads
 
+  has_one :user_avatar, dependent: :destroy
   has_one :facebook_user_info, dependent: :destroy
   has_one :twitter_user_info, dependent: :destroy
   has_one :github_user_info, dependent: :destroy
-  has_one :cas_user_info, dependent: :destroy
   has_one :oauth2_user_info, dependent: :destroy
   has_one :user_stat, dependent: :destroy
+  has_one :user_profile, dependent: :destroy, inverse_of: :user
+  has_one :single_sign_on_record, dependent: :destroy
   belongs_to :approved_by, class_name: 'User'
+  belongs_to :primary_group, class_name: 'Group'
 
   has_many :group_users, dependent: :destroy
   has_many :groups, through: :group_users
@@ -47,7 +54,7 @@ class User < ActiveRecord::Base
   has_one :user_search_data, dependent: :destroy
   has_one :api_key, dependent: :destroy
 
-  belongs_to :uploaded_avatar, class_name: 'Upload', dependent: :destroy
+  belongs_to :uploaded_avatar, class_name: 'Upload'
 
   delegate :last_sent_email_address, :to => :email_logs
 
@@ -58,7 +65,6 @@ class User < ActiveRecord::Base
   validate :password_validator
   validates :ip_address, allowed_ip_address: {on: :create, message: :signup_not_allowed}
 
-  before_save :cook
   before_save :update_username_lower
   before_save :ensure_password_is_hashed
   after_initialize :add_trust_level
@@ -66,9 +72,13 @@ class User < ActiveRecord::Base
   after_initialize :set_default_external_links_in_new_tab
 
   after_save :update_tracked_topics
+  after_save :clear_global_notice_if_needed
 
   after_create :create_email_token
   after_create :create_user_stat
+  after_create :create_user_profile
+  after_create :ensure_in_trust_level_group
+  after_save :refresh_avatar
 
   before_destroy do
     # These tables don't have primary keys, so destroying them with activerecord is tricky:
@@ -83,8 +93,9 @@ class User < ActiveRecord::Base
   attr_accessor :notification_channel_position
 
   scope :blocked, -> { where(blocked: true) } # no index
+  scope :not_blocked, -> { where(blocked: false) } # no index
   scope :suspended, -> { where('suspended_till IS NOT NULL AND suspended_till > ?', Time.zone.now) } # no index
-  scope :not_suspended, -> { where('suspended_till IS NULL') }
+  scope :not_suspended, -> { where('suspended_till IS NULL OR suspended_till <= ?', Time.zone.now) }
   # excluding fake users like the community user
   scope :real, -> { where('id > 0') }
 
@@ -93,8 +104,18 @@ class User < ActiveRecord::Base
     LAST_VISIT = -2
   end
 
+  GLOBAL_USERNAME_LENGTH_RANGE = 3..15
+
   def self.username_length
-    3..15
+    if SiteSetting.enforce_global_nicknames
+      GLOBAL_USERNAME_LENGTH_RANGE
+    else
+      SiteSetting.min_username_length.to_i..SiteSetting.max_username_length.to_i
+    end
+  end
+
+  def custom_groups
+    groups.where(automatic: false, visible: true)
   end
 
   def self.username_available?(username)
@@ -124,7 +145,7 @@ class User < ActiveRecord::Base
   def self.find_by_temporary_key(key)
     user_id = $redis.get("temporary_key:#{key}")
     if user_id.present?
-      where(id: user_id.to_i).first
+      find_by(id: user_id.to_i)
     end
   end
 
@@ -137,11 +158,11 @@ class User < ActiveRecord::Base
   end
 
   def self.find_by_email(email)
-    where(email: Email.downcase(email)).first
+    find_by(email: Email.downcase(email))
   end
 
   def self.find_by_username(username)
-    where(username_lower: username.downcase).first
+    find_by(username_lower: username.downcase)
   end
 
 
@@ -155,7 +176,7 @@ class User < ActiveRecord::Base
     self.username = new_username
 
     if current_username.downcase != new_username.downcase && valid?
-      DiscourseHub.nickname_operation { DiscourseHub.change_nickname(current_username, new_username) }
+      DiscourseHub.username_operation { DiscourseHub.change_username(current_username, new_username) }
     end
 
     save
@@ -187,7 +208,7 @@ class User < ActiveRecord::Base
   def approve(approved_by, send_mail=true)
     self.approved = true
 
-    if Fixnum === approved_by
+    if approved_by.is_a?(Fixnum)
       self.approved_by_id = approved_by
     else
       self.approved_by = approved_by
@@ -281,14 +302,21 @@ class User < ActiveRecord::Base
     last_seen_at.present?
   end
 
-  def has_visit_record?(date)
-    user_visits.where(visited_at: date).first
+  def visit_record_for(date)
+    user_visits.find_by(visited_at: date)
   end
 
   def update_visit_record!(date)
-    unless has_visit_record?(date)
-      user_stat.update_column(:days_visited, user_stat.days_visited + 1)
-      user_visits.create!(visited_at: date)
+    create_visit_record!(date) unless visit_record_for(date)
+  end
+
+  def update_posts_read!(num_posts, now=Time.zone.now)
+    if user_visit = visit_record_for(now.to_date)
+      user_visit.posts_read += num_posts
+      user_visit.save
+      user_visit
+    else
+      create_visit_record!(now.to_date, num_posts)
     end
   end
 
@@ -315,25 +343,32 @@ class User < ActiveRecord::Base
     "//www.gravatar.com/avatar/#{email_hash}.png?s={size}&r=pg&d=identicon"
   end
 
+
   # Don't pass this up to the client - it's meant for server side use
   # This is used in
   #   - self oneboxes in open graph data
   #   - emails
   def small_avatar_url
-    template = avatar_template
-    schemaless template.gsub("{size}", "45")
+    avatar_template_url.gsub("{size}", "45")
   end
 
-  # the avatars might take a while to generate
-  # so return the url of the original image in the meantime
-  def uploaded_avatar_path
-    return unless SiteSetting.allow_uploaded_avatars? && use_uploaded_avatar
-    avatar_template = uploaded_avatar_template.present? ? uploaded_avatar_template : uploaded_avatar.try(:url)
+  def avatar_template_url
     schemaless absolute avatar_template
   end
 
+  def self.avatar_template(username,uploaded_avatar_id)
+    return letter_avatar_template(username) if !uploaded_avatar_id
+    id = uploaded_avatar_id
+    username ||= ""
+    "/user_avatar/#{RailsMultisite::ConnectionManagement.current_hostname}/#{username.downcase}/{size}/#{id}.png"
+  end
+
+  def self.letter_avatar_template(username)
+    "/letter_avatar/#{username.downcase}/{size}/#{LetterAvatar::VERSION}.png"
+  end
+
   def avatar_template
-    uploaded_avatar_path || User.gravatar_template(email)
+    self.class.avatar_template(username,uploaded_avatar_id)
   end
 
   # The following count methods are somewhat slow - definitely don't use them in a loop.
@@ -344,6 +379,10 @@ class User < ActiveRecord::Base
 
   def post_count
     posts.count
+  end
+
+  def first_post
+    posts.order('created_at ASC').first
   end
 
   def flags_given_count
@@ -360,21 +399,16 @@ class User < ActiveRecord::Base
 
   def posted_too_much_in_topic?(topic_id)
 
-    # Does not apply to staff or your own topics
-    return false if staff? || Topic.where(id: topic_id, user_id: id).exists?
+    # Does not apply to staff, non-new members or your own topics
+    return false if staff? ||
+                    (trust_level != TrustLevel.levels[:newuser]) ||
+                    Topic.where(id: topic_id, user_id: id).exists?
 
-    trust_level == TrustLevel.levels[:newuser] && (Post.where(topic_id: topic_id, user_id: id).count >= SiteSetting.newuser_max_replies_per_topic)
-  end
+    last_action_in_topic = UserAction.last_action_in_topic(id, topic_id)
+    since_reply = Post.where(user_id: id, topic_id: topic_id)
+    since_reply = since_reply.where('id > ?', last_action_in_topic) if last_action_in_topic
 
-  def bio_excerpt
-    excerpt = PrettyText.excerpt(bio_cooked, 350)
-    return excerpt if excerpt.blank? || has_trust_level?(:basic)
-    PrettyText.strip_links(excerpt)
-  end
-
-  def bio_processed
-    return bio_cooked if bio_cooked.blank? || has_trust_level?(:basic)
-    PrettyText.strip_links(bio_cooked)
+    (since_reply.count >= SiteSetting.newuser_max_replies_per_topic)
   end
 
   def delete_all_posts!(guardian)
@@ -409,16 +443,6 @@ class User < ActiveRecord::Base
     admin
   end
 
-  def change_trust_level!(level)
-    raise "Invalid trust level #{level}" unless TrustLevel.valid_level?(level)
-    self.trust_level = TrustLevel.levels[level]
-    self.bio_raw_will_change! # So it can get re-cooked based on the new trust level
-    transaction do
-      self.save!
-      Group.user_trust_level_change!(self.id, self.trust_level)
-    end
-  end
-
   def guardian
     Guardian.new(self)
   end
@@ -446,16 +470,20 @@ class User < ActiveRecord::Base
     save
   end
 
+  def change_trust_level!(level, opts=nil)
+    Promotion.new(self).change_trust_level!(level, opts)
+  end
+
   def treat_as_new_topic_start_date
     duration = new_topic_duration_minutes || SiteSetting.new_topic_duration_minutes
-    case duration
+    [case duration
       when User::NewTopicDuration::ALWAYS
         created_at
       when User::NewTopicDuration::LAST_VISIT
-        previous_visit_at || created_at
+        previous_visit_at || user_stat.new_since
       else
         duration.minutes.ago
-    end
+    end, user_stat.new_since].max
   end
 
   def readable_name
@@ -463,9 +491,18 @@ class User < ActiveRecord::Base
     username
   end
 
-  def bio_summary
-    return nil unless bio_cooked.present?
-    Summarize.new(bio_cooked).summary
+  def badge_count
+    user_badges.count
+  end
+
+  def featured_user_badges
+    user_badges
+        .joins(:badge)
+        .order('badges.badge_type_id ASC, badges.grant_count ASC')
+        .includes(:user, :granted_by, badge: :badge_type)
+        .where("user_badges.id in (select min(u2.id)
+                  from user_badges u2 where u2.user_id = ? group by u2.badge_id)", id)
+        .limit(3)
   end
 
   def self.count_by_signup_date(sinceDaysAgo=30)
@@ -474,7 +511,7 @@ class User < ActiveRecord::Base
 
 
   def secure_category_ids
-    cats = self.staff? ? Category.where(read_restricted: true) : secure_categories.references(:categories)
+    cats = self.admin? ? Category.where(read_restricted: true) : secure_categories.references(:categories)
     cats.pluck('categories.id').sort
   end
 
@@ -503,13 +540,6 @@ class User < ActiveRecord::Base
     created_at > 1.day.ago
   end
 
-  def upload_avatar(avatar)
-    self.uploaded_avatar_template = nil
-    self.uploaded_avatar = avatar
-    self.use_uploaded_avatar = true
-    self.save!
-  end
-
   def generate_api_key(created_by)
     if api_key.present?
       api_key.regenerate!(created_by)
@@ -531,29 +561,109 @@ class User < ActiveRecord::Base
     @lq ||= LeaderRequirements.new(self)
   end
 
-  protected
+  def should_be_redirected_to_top
+    redirected_to_top_reason.present?
+  end
 
-  def cook
-    if bio_raw.present?
-      self.bio_cooked = PrettyText.cook(bio_raw, omit_nofollow: self.has_trust_level?(:leader)) if bio_raw_changed?
+  def redirected_to_top_reason
+    # redirect is enabled
+    return unless SiteSetting.redirect_users_to_top_page
+    # top must be in the top_menu
+    return unless SiteSetting.top_menu =~ /top/i
+    # there should be enough topics
+    return unless SiteSetting.has_enough_topics_to_redirect_to_top
+
+    if !seen_before? || (trust_level == 0 && !redirected_to_top_yet?)
+      update_last_redirected_to_top!
+      return I18n.t('redirected_to_top_reasons.new_user')
+    elsif last_seen_at < 1.month.ago
+      update_last_redirected_to_top!
+      return I18n.t('redirected_to_top_reasons.not_seen_in_a_month')
+    end
+
+    # no reason
+    nil
+  end
+
+  def redirected_to_top_yet?
+    last_redirected_to_top_at.present?
+  end
+
+  def update_last_redirected_to_top!
+    key = "user:#{id}:update_last_redirected_to_top"
+    delay = SiteSetting.active_user_rate_limit_secs
+
+    # only update last_redirected_to_top_at once every minute
+    return unless $redis.setnx(key, "1")
+    $redis.expire(key, delay)
+
+    # delay the update
+    Jobs.enqueue_in(delay / 2, :update_top_redirection, user_id: self.id, redirected_at: Time.zone.now)
+  end
+
+  def refresh_avatar
+    avatar = user_avatar || create_user_avatar
+    gravatar_downloaded = false
+
+    if SiteSetting.automatically_download_gravatars? && !avatar.last_gravatar_download_attempt
+      avatar.update_gravatar!
+      gravatar_downloaded = avatar.gravatar_upload_id
+    end
+
+    if !self.uploaded_avatar_id && gravatar_downloaded
+      self.update_column(:uploaded_avatar_id, avatar.gravatar_upload_id)
+      grant_autobiographer
     else
-      self.bio_cooked = nil
+      if uploaded_avatar_id_changed?
+        grant_autobiographer
+      end
+    end
+
+  end
+
+  def grant_autobiographer
+    if self.user_profile.bio_raw &&
+          self.user_profile.bio_raw.strip.length > Badge::AutobiographerMinBioLength &&
+          uploaded_avatar_id
+       BadgeGranter.grant(Badge.find(Badge::Autobiographer), self)
     end
   end
+
+  protected
 
   def update_tracked_topics
     return unless auto_track_topics_after_msecs_changed?
     TrackedTopicsUpdater.new(id, auto_track_topics_after_msecs).call
   end
 
+  def clear_global_notice_if_needed
+    if admin && SiteSetting.has_login_hint
+      SiteSetting.has_login_hint = false
+      SiteSetting.global_notice = ""
+    end
+  end
+
+  def create_user_profile
+    UserProfile.create(user_id: id)
+  end
+
+  def ensure_in_trust_level_group
+    Group.user_trust_level_change!(id, trust_level)
+  end
+
   def create_user_stat
-    stat = UserStat.new
+    stat = UserStat.new(new_since: Time.now)
     stat.user_id = id
     stat.save!
   end
 
   def create_email_token
     email_tokens.create(email: email)
+  end
+
+  def create_visit_record!(date, posts_read=0)
+    user_stat.update_column(:days_visited, user_stat.days_visited + 1)
+    user_visits.create!(visited_at: date, posts_read: posts_read)
   end
 
   def ensure_password_is_hashed
@@ -580,7 +690,7 @@ class User < ActiveRecord::Base
   def username_validator
     username_format_validator || begin
       lower = username.downcase
-      existing = User.where(username_lower: lower).first
+      existing = User.find_by(username_lower: lower)
       if username_changed? && existing && existing.id != self.id
         errors.add(:username, I18n.t(:'user.username.unique'))
       end
@@ -632,26 +742,23 @@ end
 # Table name: users
 #
 #  id                            :integer          not null, primary key
-#  username                      :string(20)       not null
-#  created_at                    :datetime         not null
-#  updated_at                    :datetime         not null
+#  username                      :string(60)       not null
+#  created_at                    :datetime
+#  updated_at                    :datetime
 #  name                          :string(255)
-#  bio_raw                       :text
 #  seen_notification_id          :integer          default(0), not null
 #  last_posted_at                :datetime
 #  email                         :string(256)      not null
 #  password_hash                 :string(64)
 #  salt                          :string(32)
 #  active                        :boolean
-#  username_lower                :string(20)       not null
+#  username_lower                :string(60)       not null
 #  auth_token                    :string(32)
 #  last_seen_at                  :datetime
-#  website                       :string(255)
 #  admin                         :boolean          default(FALSE), not null
 #  last_emailed_at               :datetime
 #  email_digests                 :boolean          not null
 #  trust_level                   :integer          not null
-#  bio_cooked                    :text
 #  email_private_messages        :boolean          default(TRUE)
 #  email_direct                  :boolean          default(TRUE), not null
 #  approved                      :boolean          default(FALSE), not null
@@ -667,16 +774,20 @@ end
 #  flag_level                    :integer          default(0), not null
 #  ip_address                    :inet
 #  new_topic_duration_minutes    :integer
-#  external_links_in_new_tab     :boolean          default(FALSE), not null
+#  external_links_in_new_tab     :boolean          not null
 #  enable_quoting                :boolean          default(TRUE), not null
 #  moderator                     :boolean          default(FALSE)
 #  blocked                       :boolean          default(FALSE)
 #  dynamic_favicon               :boolean          default(FALSE), not null
 #  title                         :string(255)
-#  use_uploaded_avatar           :boolean          default(FALSE)
-#  uploaded_avatar_template      :string(255)
 #  uploaded_avatar_id            :integer
 #  email_always                  :boolean          default(FALSE), not null
+#  mailing_list_mode             :boolean          default(FALSE), not null
+#  primary_group_id              :integer
+#  locale                        :string(10)
+#  registration_ip_address       :inet
+#  last_redirected_to_top_at     :datetime
+#  disable_jump_reply            :boolean          default(FALSE), not null
 #
 # Indexes
 #

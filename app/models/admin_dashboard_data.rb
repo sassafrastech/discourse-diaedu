@@ -27,6 +27,9 @@ class AdminDashboardData
       gc_checks,
       sidekiq_check || queue_size_check,
       ram_check,
+      old_google_config_check,
+      both_googles_config_check,
+      google_oauth2_config_check,
       facebook_config_check,
       twitter_config_check,
       github_config_check,
@@ -44,6 +47,7 @@ class AdminDashboardData
       enforce_global_nicknames_check
     ].compact
   end
+
 
   def self.fetch_stats
     AdminDashboardData.new
@@ -106,8 +110,20 @@ class AdminDashboardData
     I18n.t('dashboard.memory_warning') if MemInfo.new.mem_total and MemInfo.new.mem_total < 1_000_000
   end
 
+  def old_google_config_check
+    I18n.t('dashboard.enable_google_logins_warning') if SiteSetting.enable_google_logins
+  end
+
+  def both_googles_config_check
+    I18n.t('dashboard.both_googles_warning') if SiteSetting.enable_google_logins && SiteSetting.enable_google_oauth2_logins
+  end
+
+  def google_oauth2_config_check
+    I18n.t('dashboard.google_oauth2_config_warning') if SiteSetting.enable_google_oauth2_logins && (SiteSetting.google_oauth2_client_id.blank? || SiteSetting.google_oauth2_client_secret.blank?)
+  end
+
   def facebook_config_check
-    I18n.t('dashboard.facebook_config_warning') if SiteSetting.enable_facebook_logins and (SiteSetting.facebook_app_id.blank? or SiteSetting.facebook_app_secret.blank?)
+    I18n.t('dashboard.facebook_config_warning') if SiteSetting.enable_facebook_logins && (SiteSetting.facebook_app_id.blank? || SiteSetting.facebook_app_secret.blank?)
   end
 
   def twitter_config_check
@@ -119,7 +135,9 @@ class AdminDashboardData
   end
 
   def s3_config_check
-    I18n.t('dashboard.s3_config_warning') if SiteSetting.enable_s3_uploads and (SiteSetting.s3_access_key_id.blank? or SiteSetting.s3_secret_access_key.blank? or SiteSetting.s3_upload_bucket.blank?)
+    return I18n.t('dashboard.s3_config_warning') if SiteSetting.enable_s3_uploads and (SiteSetting.s3_access_key_id.blank? or SiteSetting.s3_secret_access_key.blank? or SiteSetting.s3_upload_bucket.blank?)
+    return I18n.t('dashboard.s3_backup_config_warning') if SiteSetting.enable_s3_backups and (SiteSetting.s3_access_key_id.blank? or SiteSetting.s3_secret_access_key.blank? or SiteSetting.s3_backup_bucket.blank?)
+    nil
   end
 
   def image_magick_check

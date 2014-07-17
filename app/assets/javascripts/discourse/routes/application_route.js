@@ -10,9 +10,31 @@ Discourse.ApplicationRoute = Em.Route.extend({
 
   actions: {
 
+    error: function(err, transition) {
+      if (err.status === 404) {
+        // 404
+        this.intermediateTransitionTo('unknown');
+        return;
+      }
+
+      var exceptionController = this.controllerFor('exception');
+      exceptionController.setProperties({ lastTransition: transition, thrown: err });
+
+      this.intermediateTransitionTo('exception');
+    },
+
     showLogin: function() {
-      Discourse.Route.showModal(this, 'login');
-      this.controllerFor('login').resetForm();
+      if (Discourse.get("isReadOnly")) {
+        bootbox.alert(I18n.t("read_only_mode.login_disabled"));
+      } else {
+        if(Discourse.SiteSettings.enable_sso) {
+          var returnPath = encodeURIComponent(window.location.pathname);
+          window.location = Discourse.getURL('/session/sso?return_path=' + returnPath);
+        } else {
+          Discourse.Route.showModal(this, 'login');
+          this.controllerFor('login').resetForm();
+        }
+      }
     },
 
     showCreateAccount: function() {
@@ -30,7 +52,7 @@ Discourse.ApplicationRoute = Em.Route.extend({
 
     showUploadSelector: function(composerView) {
       Discourse.Route.showModal(this, 'uploadSelector');
-      this.controllerFor('uploadSelector').setProperties({ composerView: composerView });
+      this.controllerFor('upload-selector').setProperties({ composerView: composerView });
     },
 
     showKeyboardShortcutsHelp: function() {
@@ -44,7 +66,7 @@ Discourse.ApplicationRoute = Em.Route.extend({
       @method closeModal
     **/
     closeModal: function() {
-      this.render('hide_modal', {into: 'modal', outlet: 'modalBody'});
+      this.render('hide-modal', {into: 'modal', outlet: 'modalBody'});
     },
 
     /**
@@ -70,7 +92,7 @@ Discourse.ApplicationRoute = Em.Route.extend({
     editCategory: function(category) {
       var router = this;
 
-      if (category.get('isUncategorized')) {
+      if (category.get('isUncategorizedCategory')) {
         Discourse.Route.showModal(router, 'editCategory', category);
         router.controllerFor('editCategory').set('selectedTab', 'general');
       } else {
