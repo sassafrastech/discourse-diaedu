@@ -334,7 +334,7 @@ class ApplicationController < ActionController::Base
     end
 
     def redirect_to_login_if_required
-      return if current_user || (request.format.json? && api_key_valid?)
+      return if current_user || (request.format.json? && api_key_valid?) || self.class.name =~ /Diaedu/
 
       redirect_to :login if SiteSetting.login_required?
     end
