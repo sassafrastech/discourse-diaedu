@@ -1,4 +1,4 @@
-ActiveAdmin.register Diaedu::Glyprob, :as => 'Glycemic Problem' do
+ActiveAdmin.register Diaedu::Glyprob, :as => 'Glyprob' do
 
   actions :all, :except => [:show]
 
