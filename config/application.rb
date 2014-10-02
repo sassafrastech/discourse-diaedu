@@ -2,12 +2,14 @@ require File.expand_path('../boot', __FILE__)
 require 'rails/all'
 
 # Plugin related stuff
+require_relative '../lib/discourse_event'
+require_relative '../lib/discourse_plugin'
 require_relative '../lib/discourse_plugin_registry'
 
 # Global config
 require_relative '../app/models/global_setting'
 
-require 'pry-rails' if Rails.env == "development"
+require 'pry-rails' if Rails.env.development?
 
 if defined?(Bundler)
   Bundler.require(*Rails.groups(assets: %w(development test profile)))
@@ -16,7 +18,7 @@ end
 module Discourse
   class Application < Rails::Application
     def config.database_configuration
-      if Rails.env == "production"
+      if Rails.env.production?
         GlobalSetting.database_config
       else
         super
@@ -93,8 +95,7 @@ module Discourse
         :s3_secret_access_key,
         :twitter_consumer_secret,
         :facebook_app_secret,
-        :github_client_secret,
-        :discourse_org_access_key,
+        :github_client_secret
     ]
 
     # Enable the asset pipeline

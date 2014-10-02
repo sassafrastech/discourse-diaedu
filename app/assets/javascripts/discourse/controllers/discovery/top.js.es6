@@ -1,13 +1,15 @@
-/**
-  The controller for discoverying 'Top' topics
+import DiscoveryController from 'discourse/controllers/discovery';
 
-  @class DiscoveryTopController
-  @extends Discourse.Controller
-  @namespace Discourse
-  @module Discourse
-**/
-export default Discourse.DiscoveryController.extend({
+export default DiscoveryController.extend({
   needs: ['discovery'],
+
+  period: function() {
+    return this.get('controllers.discovery.periods').findBy('id', this.get('periodId'));
+  }.property('periodId'),
+
+  topicList: function() {
+    return this.get('model.' + this.get('periodId'));
+  }.property('periodId'),
 
   actions: {
     refresh: function() {
@@ -22,7 +24,6 @@ export default Discourse.DiscoveryController.extend({
         self.send('loadingComplete');
       });
     }
-  },
+  }
 
-  hasDisplayedAllTopLists: Em.computed.and('content.yearly', 'content.monthly', 'content.weekly', 'content.daily')
 });

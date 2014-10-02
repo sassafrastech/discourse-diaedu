@@ -23,14 +23,20 @@ class Category < ActiveRecord::Base
   has_many :groups, through: :category_groups
 
   validates :user_id, presence: true
-  validates :name, presence: true, uniqueness: { scope: :parent_category_id }, length: { in: 1..50 }
+  validates :name, if: Proc.new { |c| c.new_record? || c.name_changed? },
+                   presence: true,
+                   uniqueness: { scope: :parent_category_id, case_sensitive: false },
+                   length: { in: 1..50 }
   validate :parent_category_validator
 
   before_validation :ensure_slug
   before_save :apply_permissions
+  before_save :downcase_email
+  before_save :downcase_name
   after_create :create_category_definition
   after_create :publish_categories_list
   after_destroy :publish_categories_list
+  after_update :rename_category_definition, if: :name_changed?
 
   has_one :category_search_data
   belongs_to :parent_category, class_name: 'Category'
@@ -182,7 +188,7 @@ SQL
 
       # If a category with that slug already exists, set the slug to nil so the category can be found
       # another way.
-      category = Category.where(slug: self.slug)
+      category = Category.where(slug: self.slug, parent_category_id: parent_category_id)
       category = category.where("id != ?", id) if id.present?
       self.slug = '' if category.exists?
     end
@@ -198,7 +204,8 @@ SQL
 
   def parent_category_validator
     if parent_category_id
-      errors.add(:parent_category_id, I18n.t("category.errors.self_parent")) if parent_category_id == id
+      errors.add(:base, I18n.t("category.errors.self_parent")) if parent_category_id == id
+      errors.add(:base, I18n.t("category.errors.uncategorized_parent")) if uncategorized?
 
       grandfather_id = Category.where(id: parent_category_id).pluck(:parent_category_id).first
       errors.add(:base, I18n.t("category.errors.depth")) if grandfather_id
@@ -242,6 +249,14 @@ SQL
       end
       @permissions = nil
     end
+  end
+
+  def downcase_email
+    self.email_in = email_in.downcase if self.email_in
+  end
+
+  def downcase_name
+    self.name_lower = name.downcase if self.name
   end
 
   def secure_group_ids
@@ -299,7 +314,7 @@ SQL
   end
 
   def self.query_parent_category(parent_slug)
-    self.where(slug: parent_slug).pluck(:id).first ||
+    self.where(slug: parent_slug, parent_category_id: nil).pluck(:id).first ||
     self.where(id: parent_slug.to_i).pluck(:id).first
   end
 
@@ -325,6 +340,16 @@ SQL
     url << "/#{parent_category.slug}" if parent_category_id
     url << "/#{slug}"
   end
+
+  # If the name changes, try and update the category definition topic too if it's
+  # an exact match
+  def rename_category_definition
+    old_name = changed_attributes["name"]
+    return unless topic.present?
+    if topic.title == I18n.t("category.topic_prefix", category: old_name)
+      topic.update_column(:title, I18n.t("category.topic_prefix", category: name))
+    end
+  end
 end
 
 # == Schema Information
@@ -336,8 +361,8 @@ end
 #  color                    :string(6)        default("AB9364"), not null
 #  topic_id                 :integer
 #  topic_count              :integer          default(0), not null
-#  created_at               :datetime
-#  updated_at               :datetime
+#  created_at               :datetime         not null
+#  updated_at               :datetime         not null
 #  user_id                  :integer          not null
 #  topics_year              :integer          default(0)
 #  topics_month             :integer          default(0)
@@ -361,10 +386,12 @@ end
 #  posts_day                :integer          default(0)
 #  logo_url                 :string(255)
 #  background_url           :string(255)
+#  allow_badges             :boolean          default(TRUE), not null
+#  name_lower               :string(50)       not null
 #
 # Indexes
 #
-#  index_categories_on_email_in     (email_in) UNIQUE
-#  index_categories_on_topic_count  (topic_count)
-#  unique_index_categories_on_name  (name) UNIQUE
+#  index_categories_on_email_in            (email_in) UNIQUE
+#  index_categories_on_forum_thread_count  (topic_count)
+#  unique_index_categories_on_name         (name) UNIQUE
 #

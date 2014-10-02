@@ -15,13 +15,15 @@ Discourse::Application.routes.draw do
   match "/404", to: "exceptions#not_found", via: [:get, :post]
   get "/404-body" => "exceptions#not_found_body"
 
-  if Rails.env == "development"
+  if Rails.env.development?
     mount Sidekiq::Web => "/sidekiq"
     mount Logster::Web => "/logs"
   else
     mount Sidekiq::Web => "/sidekiq", constraints: AdminConstraint.new
     mount Logster::Web => "/logs", constraints: AdminConstraint.new
   end
+
+  resources :about
 
   get "site" => "site#index"
 
@@ -71,6 +73,8 @@ Discourse::Application.routes.draw do
       put "unblock"
       put "trust_level"
       put "primary_group"
+      post "groups" => "users#add_group", constraints: AdminConstraint.new
+      delete "groups/:group_id" => "users#remove_group", constraints: AdminConstraint.new
       get "badges"
       get "leader_requirements"
     end
@@ -93,6 +97,8 @@ Discourse::Application.routes.draw do
       resources :screened_ip_addresses, only: [:index, :create, :update, :destroy]
       resources :screened_urls,         only: [:index]
     end
+
+    get "/logs" => "staff_action_logs#index"
 
     get "customize" => "color_schemes#index", constraints: AdminConstraint.new
     get "customize/css_html" => "site_customizations#index", constraints: AdminConstraint.new
@@ -140,9 +146,20 @@ Discourse::Application.routes.draw do
       end
     end
 
+    resources :export_csv, constraints: AdminConstraint.new do
+      member do
+        get "download" => "export_csv#download", constraints: { id: /[^\/]+/ }
+      end
+      collection do
+        get "users" => "export_csv#export_user_list"
+      end
+    end
+
     resources :badges, constraints: AdminConstraint.new do
       collection do
         get "types" => "badges#badge_types"
+        post "badge_groupings" => "badges#save_badge_groupings"
+        post "preview" => "badges#preview"
       end
     end
 
@@ -182,10 +199,12 @@ Discourse::Application.routes.draw do
   get "privacy" => "static#show", id: "privacy"
   get "signup" => "list#latest"
 
+  post "users/read-faq" => "users#read_faq"
   get "users/search/users" => "users#search_users"
   get "users/password-reset/:token" => "users#password_reset"
   put "users/password-reset/:token" => "users#password_reset"
   get "users/activate-account/:token" => "users#activate_account"
+  put "users/activate-account/:token" => "users#perform_account_activation", as: 'perform_activate_account'
   get "users/authorize-email/:token" => "users#authorize_email"
   get "users/hp" => "users#get_honeypot_value"
   get "my/*path", to: 'users#my_redirect'
@@ -215,6 +234,9 @@ Discourse::Application.routes.draw do
   get "users/:username/badges" => "users#show", constraints: {username: USERNAME_ROUTE_FORMAT}
   delete "users/:username" => "users#destroy", constraints: {username: USERNAME_ROUTE_FORMAT}
   get "users/by-external/:external_id" => "users#show"
+  get "users/:username/flagged-posts" => "users#show", constraints: {username: USERNAME_ROUTE_FORMAT}
+  get "users/:username/deleted-posts" => "users#show", constraints: {username: USERNAME_ROUTE_FORMAT}
+  get "users/:username/badges_json" => "user_badges#username"
 
   post "user_avatar/:username/refresh_gravatar" => "user_avatars#refresh_gravatar"
   get "letter_avatar/:username/:size/:version.png" => "user_avatars#show_letter",
@@ -228,6 +250,8 @@ Discourse::Application.routes.draw do
 
   get "posts/by_number/:topic_id/:post_number" => "posts#by_number"
   get "posts/:id/reply-history" => "posts#reply_history"
+  get "posts/:username/deleted" => "posts#deleted_posts", constraints: {username: USERNAME_ROUTE_FORMAT}
+  get "posts/:username/flagged" => "posts#flagged_posts", constraints: {username: USERNAME_ROUTE_FORMAT}
 
   resources :groups do
     get 'members'
@@ -246,8 +270,6 @@ Discourse::Application.routes.draw do
     end
   end
 
-  get "p/:post_id/:user_id" => "posts#short_link"
-
   resources :notifications
 
   match "/auth/:provider/callback", to: "users/omniauth_callbacks#complete", via: [:get, :post]
@@ -264,7 +286,7 @@ Discourse::Application.routes.draw do
   resources :post_actions do
     collection do
       get "users"
-      post "clear_flags"
+      post "defer_flags"
     end
   end
   resources :user_actions
@@ -365,9 +387,11 @@ Discourse::Application.routes.draw do
 
   post "t/:topic_id/notifications" => "topics#set_notifications" , constraints: {topic_id: /\d+/}
 
+  get "p/:post_id(/:user_id)" => "posts#short_link"
   get "/posts/:id/cooked" => "posts#cooked"
   get "/posts/:id/expand-embed" => "posts#expand_embed"
-  get "raw/:topic_id(/:post_number)" => "posts#markdown"
+  get "/posts/:id/raw" => "posts#markdown_id"
+  get "raw/:topic_id(/:post_number)" => "posts#markdown_num"
 
   resources :invites do
     collection do
@@ -375,6 +399,8 @@ Discourse::Application.routes.draw do
       post "upload" => "invites#upload_csv_chunk"
     end
   end
+  post "invites/disposable" => "invites#create_disposable_invite"
+  get "invites/redeem/:token" => "invites#redeem_disposable_invite"
   delete "invites" => "invites#destroy"
 
   get "onebox" => "onebox#show"

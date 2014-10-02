@@ -186,6 +186,14 @@ describe SessionController do
         end
       end
 
+      describe 'invalid password' do
+        it "should return an error with an invalid password if too long" do
+          User.any_instance.expects(:confirm_password?).never
+          xhr :post, :create, login: user.username, password: ('s' * (User.max_password_length + 1))
+          ::JSON.parse(response.body)['error'].should be_present
+        end
+      end
+
       describe 'suspended user' do
         it 'should return an error' do
           User.any_instance.stubs(:suspended?).returns(true)
@@ -360,7 +368,7 @@ describe SessionController do
       let(:user) { Fabricate(:user) }
 
       it "returns a 500 if local logins are disabled" do
-        SiteSetting.stubs(:enable_local_logins).returns(false)
+        SiteSetting.enable_local_logins = false
         xhr :post, :forgot_password, login: user.username
         response.code.to_i.should == 500
       end

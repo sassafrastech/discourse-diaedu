@@ -195,16 +195,8 @@ describe Search do
       it 'returns the post' do
         result.should be_present
         result[:title].should == topic.title
-        result[:url].should == reply.url
-      end
-    end
 
-    context "search for a topic by id" do
-      let(:result) { first_of_type(Search.new(topic.id, type_filter: 'topic', min_search_term_length: 1).execute, 'topic') }
-
-      it 'returns the topic' do
-        result.should be_present
-        result[:title].should == topic.title
+        # The link is to the topic url because it's aggregated
         result[:url].should == topic.relative_url
       end
     end

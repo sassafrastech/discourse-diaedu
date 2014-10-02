@@ -57,7 +57,7 @@ class UserHistory < ActiveRecord::Base
     end
     [:acting_user, :target_user].each do |key|
       if filters[key] and obj_id = User.where(username_lower: filters[key].downcase).pluck(:id)
-        query = query.where("#{key.to_s}_id = ?", obj_id)
+        query = query.where("#{key}_id = ?", obj_id)
       end
     end
     query = query.where("subject = ?", filters[:subject]) if filters[:subject]
@@ -105,8 +105,8 @@ end
 #  acting_user_id :integer
 #  target_user_id :integer
 #  details        :text
-#  created_at     :datetime
-#  updated_at     :datetime
+#  created_at     :datetime         not null
+#  updated_at     :datetime         not null
 #  context        :string(255)
 #  ip_address     :string(255)
 #  email          :string(255)
@@ -118,8 +118,8 @@ end
 #
 # Indexes
 #
+#  index_staff_action_logs_on_action_and_id                  (action,id)
+#  index_staff_action_logs_on_subject_and_id                 (subject,id)
+#  index_staff_action_logs_on_target_user_id_and_id          (target_user_id,id)
 #  index_user_histories_on_acting_user_id_and_action_and_id  (acting_user_id,action,id)
-#  index_user_histories_on_action_and_id                     (action,id)
-#  index_user_histories_on_subject_and_id                    (subject,id)
-#  index_user_histories_on_target_user_id_and_id             (target_user_id,id)
 #

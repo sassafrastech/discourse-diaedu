@@ -2,7 +2,7 @@
   <h1>
     {{#link-to 'badges.index'}}{{i18n badges.title}}{{/link-to}}
     <i class='fa fa-angle-right'></i>
-    {{name}}
+    {{displayName}}
   </h1>
 
   <table class='badges-listing'>
@@ -30,7 +30,7 @@
           {{/link-to}}
 
           {{#if post_number}}
-            <a class="post-link" href="{{unbound topic.url}}/{{unbound post_number}}"><span class="post-number">#{{post_number}}</span> {{topic.title}}</a>
+            <a class="post-link" href="{{unbound topic.url}}/{{unbound post_number}}">{{topic.title}}</a>
           {{/if}}
         </div>
       {{/each}}

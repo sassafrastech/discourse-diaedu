@@ -7,6 +7,7 @@ class AdminDetailedUserSerializer < AdminUserSerializer
              :can_revoke_moderation,
              :can_impersonate,
              :like_count,
+             :like_given_count,
              :post_count,
              :topic_count,
              :flags_given_count,
@@ -22,7 +23,7 @@ class AdminDetailedUserSerializer < AdminUserSerializer
   has_one :api_key, serializer: ApiKeySerializer, embed: :objects
   has_one :suspended_by, serializer: BasicUserSerializer, embed: :objects
   has_one :leader_requirements, serializer: LeaderRequirementsSerializer, embed: :objects
-  has_many :custom_groups, embed: :object, serializer: BasicGroupSerializer
+  has_many :groups, embed: :object, serializer: BasicGroupSerializer
 
   def can_revoke_admin
     scope.can_revoke_admin?(object)

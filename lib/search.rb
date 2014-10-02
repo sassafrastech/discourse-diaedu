@@ -55,6 +55,19 @@ class Search
       SearchObserver.index(post)
     end
 
+    posts = Post.joins(:topic)
+            .where('posts.id IN (
+               SELECT p2.id FROM posts p2
+               LEFT JOIN topic_search_data pd ON locale = ? AND p2.topic_id = pd.topic_id
+               WHERE pd.topic_id IS NULL AND p2.post_number = 1
+              )', SiteSetting.default_locale).limit(10000)
+
+    posts.each do |post|
+      # force indexing
+      post.cooked += " "
+      SearchObserver.index(post)
+    end
+
     nil
   end
 
@@ -104,8 +117,6 @@ class Search
         return single_topic(route[:topic_id]).as_json if route[:topic_id].present?
       rescue ActionController::RoutingError
       end
-
-      return single_topic(@term.to_i).as_json if @term =~ /^\d+$/
     end
 
     find_grouped_results.as_json
@@ -195,7 +206,8 @@ class Search
       end
     end
 
-    def posts_query(limit)
+    def posts_query(limit, opts=nil)
+      opts ||= {}
       posts = Post.includes(:post_search_data, {:topic => :category})
                   .where("topics.deleted_at" => nil)
                   .where("topics.visible")
@@ -223,8 +235,14 @@ class Search
       end
 
       posts = posts.order("TS_RANK_CD(TO_TSVECTOR(#{query_locale}, topics.title), #{ts_query}) DESC")
-                   .order("TS_RANK_CD(post_search_data.search_data, #{ts_query}) DESC")
-                   .order("topics.bumped_at DESC")
+
+      data_ranking = "TS_RANK_CD(post_search_data.search_data, #{ts_query})"
+      if opts[:aggregate_search]
+        posts = posts.order("SUM(#{data_ranking}) DESC")
+      else
+        posts = posts.order("#{data_ranking} DESC")
+      end
+      posts = posts.order("topics.bumped_at DESC")
 
       if secure_category_ids.present?
         posts = posts.where("(categories.id IS NULL) OR (NOT categories.read_restricted) OR (categories.id IN (?))", secure_category_ids).references(:categories)
@@ -242,10 +260,10 @@ class Search
       self.class.query_locale
     end
 
-    def self.ts_query(term, locale = nil)
+    def self.ts_query(term, locale = nil, joiner = "&")
       locale = Post.sanitize(locale) if locale
-      all_terms = term.gsub(/[:()&!'"]/,'').split
-      query = Post.sanitize(all_terms.map {|t| "#{PG::Connection.escape_string(t)}:*"}.join(" & "))
+      all_terms = term.gsub(/[*:()&!'"]/,'').squish.split
+      query = Post.sanitize(all_terms.map {|t| "#{PG::Connection.escape_string(t)}:*"}.join(" #{joiner} "))
       "TO_TSQUERY(#{locale || query_locale}, #{query})"
     end
 
@@ -259,6 +277,18 @@ class Search
       end
     end
 
+    def aggregate_search
+      cols = ['topics.id', 'topics.title', 'topics.slug']
+      topics = posts_query(@limit, aggregate_search: true).group(*cols).pluck(*cols)
+      topics.each do |t|
+        @results.add_result(SearchResult.new(type: :topic,
+                                             topic_id: t[0],
+                                             id: t[0],
+                                             title: t[1],
+                                             url: "/t/#{t[2]}/#{t[0]}"))
+      end
+    end
+
     def topic_search
 
       posts = if @search_context.is_a?(User)
@@ -266,10 +296,12 @@ class Search
                 posts_query(@limit * Search.burst_factor)
               elsif @search_context.is_a?(Topic)
                 posts_query(@limit).where('posts.post_number = 1 OR posts.topic_id = ?', @search_context.id)
-              else
-                posts_query(@limit).where(post_number: 1)
+              elsif @include_blurbs
+                posts_query(@limit).where('posts.post_number = 1')
               end
 
+      # If no context, do an aggregate search
+      return aggregate_search if posts.nil?
 
       posts.each do |p|
         @results.add_result(SearchResult.from_post(p, @search_context, @term, @include_blurbs))

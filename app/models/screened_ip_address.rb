@@ -51,7 +51,7 @@ class ScreenedIpAddress < ActiveRecord::Base
       if mask == 32
         ip_address.to_s
       else
-        "#{ip_address.to_s}/#{ip_address.instance_variable_get(:@mask_addr).to_s(2).count('1')}"
+        "#{ip_address}/#{ip_address.instance_variable_get(:@mask_addr).to_s(2).count('1')}"
       end
     else
       nil
@@ -92,8 +92,8 @@ end
 #  action_type   :integer          not null
 #  match_count   :integer          default(0), not null
 #  last_match_at :datetime
-#  created_at    :datetime
-#  updated_at    :datetime
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
 #
 # Indexes
 #

@@ -57,6 +57,8 @@ Spork.prefork do
 
     config.before(:suite) do
 
+      Sidekiq.error_handlers.clear
+
       # Ugly, but needed until we have a user creator
       User.skip_callback(:create, :after, :ensure_in_trust_level_group)
 
@@ -89,6 +91,7 @@ Spork.prefork do
       SiteSetting.enable_system_avatars = false
       SiteSetting.automatically_download_gravatars = false
 
+      I18n.locale = :en
     end
 
     class TestCurrentUserProvider < Auth::DefaultCurrentUserProvider
@@ -108,6 +111,12 @@ Spork.prefork do
   def freeze_time(now=Time.now)
     DateTime.stubs(:now).returns(DateTime.parse(now.to_s))
     Time.stubs(:now).returns(Time.parse(now.to_s))
+  end
+
+  def file_from_fixtures(filename)
+    FileUtils.mkdir_p("#{Rails.root}/tmp/spec") unless Dir.exists?("#{Rails.root}/tmp/spec")
+    FileUtils.cp("#{Rails.root}/spec/fixtures/images/#{filename}", "#{Rails.root}/tmp/spec/#{filename}")
+    File.new("#{Rails.root}/tmp/spec/#{filename}")
   end
 
 end

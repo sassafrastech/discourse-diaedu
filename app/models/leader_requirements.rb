@@ -6,13 +6,17 @@ class LeaderRequirements
 
   TIME_PERIOD = 100 # days
 
+  LOW_WATER_MARK = 0.9
+
   attr_accessor :days_visited, :min_days_visited,
                 :num_topics_replied_to, :min_topics_replied_to,
                 :topics_viewed, :min_topics_viewed,
                 :posts_read, :min_posts_read,
                 :topics_viewed_all_time, :min_topics_viewed_all_time,
                 :posts_read_all_time, :min_posts_read_all_time,
-                :num_flagged_posts, :max_flagged_posts
+                :num_flagged_posts, :max_flagged_posts,
+                :num_likes_given, :min_likes_given,
+                :num_likes_received, :min_likes_received
 
   def initialize(user)
     @user = user
@@ -24,9 +28,24 @@ class LeaderRequirements
       topics_viewed >= min_topics_viewed &&
       posts_read >= min_posts_read &&
       num_flagged_posts <= max_flagged_posts &&
+      num_flagged_by_users <= max_flagged_by_users &&
       topics_viewed_all_time >= min_topics_viewed_all_time &&
       posts_read_all_time >= min_posts_read_all_time &&
-      num_flagged_by_users <= max_flagged_by_users
+      num_likes_given >= min_likes_given &&
+      num_likes_received >= min_likes_received
+  end
+
+  def requirements_lost?
+    days_visited < min_days_visited * LOW_WATER_MARK ||
+    num_topics_replied_to < min_topics_replied_to * LOW_WATER_MARK ||
+    topics_viewed < min_topics_viewed * LOW_WATER_MARK ||
+    posts_read < min_posts_read * LOW_WATER_MARK ||
+    num_flagged_posts > max_flagged_posts ||
+    num_flagged_by_users > max_flagged_by_users ||
+    topics_viewed_all_time < min_topics_viewed_all_time ||
+    posts_read_all_time < min_posts_read_all_time ||
+    num_likes_given < min_likes_given * LOW_WATER_MARK ||
+    num_likes_received < min_likes_received * LOW_WATER_MARK
   end
 
   def days_visited
@@ -34,7 +53,7 @@ class LeaderRequirements
   end
 
   def min_days_visited
-    (TIME_PERIOD * (SiteSetting.leader_requires_days_visited.to_f / 100.0)).to_i
+    SiteSetting.leader_requires_days_visited
   end
 
   def num_topics_replied_to
@@ -46,7 +65,7 @@ class LeaderRequirements
   end
 
   def topics_viewed_query
-    View.where(user_id: @user.id, parent_type: 'Topic').select('distinct(parent_id)')
+    TopicViewItem.where(user_id: @user.id).select('topic_id')
   end
 
   def topics_viewed
@@ -82,7 +101,12 @@ class LeaderRequirements
   end
 
   def num_flagged_posts
-    PostAction.with_deleted.where(post_id: flagged_post_ids).where.not(user_id: @user.id).pluck(:post_id).uniq.count
+    PostAction.with_deleted
+              .where(post_id: flagged_post_ids)
+              .where.not(user_id: @user.id)
+              .where.not(agreed_at: nil)
+              .pluck(:post_id)
+              .uniq.count
   end
 
   def max_flagged_posts
@@ -90,12 +114,34 @@ class LeaderRequirements
   end
 
   def num_flagged_by_users
-    PostAction.with_deleted.where(post_id: flagged_post_ids).where.not(user_id: @user.id).pluck(:user_id).uniq.count
+    PostAction.with_deleted
+              .where(post_id: flagged_post_ids)
+              .where.not(user_id: @user.id)
+              .where.not(agreed_at: nil)
+              .pluck(:user_id)
+              .uniq.count
   end
 
   def max_flagged_by_users
     SiteSetting.leader_requires_max_flagged
   end
+
+  def num_likes_given
+    UserAction.where(user_id: @user.id, action_type: UserAction::LIKE).where('created_at > ?', TIME_PERIOD.days.ago).count
+  end
+
+  def min_likes_given
+    SiteSetting.leader_requires_likes_given
+  end
+
+  def num_likes_received
+    UserAction.where(user_id: @user.id, action_type: UserAction::WAS_LIKED).where('created_at > ?', TIME_PERIOD.days.ago).count
+  end
+
+  def min_likes_received
+    SiteSetting.leader_requires_likes_received
+  end
+
 
   def self.clear_cache
     $redis.del NUM_TOPICS_KEY
@@ -124,7 +170,9 @@ class LeaderRequirements
   end
 
   def flagged_post_ids
-    # (TODO? and moderators explicitly agreed with the flags)
-    @user.posts.with_deleted.where('created_at > ? AND (spam_count > 0 OR inappropriate_count > 0)', TIME_PERIOD.days.ago).pluck(:id)
+    @user.posts
+         .with_deleted
+         .where('created_at > ? AND (spam_count > 0 OR inappropriate_count > 0)', TIME_PERIOD.days.ago)
+         .pluck(:id)
   end
 end
