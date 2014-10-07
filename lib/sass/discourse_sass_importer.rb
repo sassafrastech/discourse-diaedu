@@ -8,8 +8,13 @@ class DiscourseSassImporter < Sass::Importers::Filesystem
   # first argument or a sprockets context. If the first argument is a sprockets
   # context we store it and use it to mark dependencies.
   def initialize(*args)
-    @context = args.first unless args.first.is_a? String
-    @root = Rails.root.join('app', 'assets', 'stylesheets').to_s
+    if args.count == 2
+      @context = args.first
+      super args[1].to_s
+    else
+      @context = args.first unless args.first.is_a? String
+      @root = Rails.root.join('app', 'assets', 'stylesheets').to_s
+    end
     @same_name_warnings = Set.new
   end
 
